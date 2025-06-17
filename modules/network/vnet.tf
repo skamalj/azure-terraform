@@ -42,6 +42,43 @@ resource "azurerm_network_security_group" "public_nsg" {
   resource_group_name = var.resource_group.name
 }
 
+// @! add code to add nsg rules for public and private subnets. Accept rules as list of objects in the variable
+
+
+resource "azurerm_network_security_rule" "private_nsg_rules" {
+  for_each = { for rule in var.private_nsg_rules : rule.name => rule }
+
+  name                        = each.value.name
+  priority                    = each.value.priority
+  direction                   = each.value.direction
+  access                      = each.value.access
+  protocol                    = each.value.protocol
+  source_port_range           = each.value.source_port_range
+  destination_port_range      = each.value.destination_port_range
+  source_address_prefix      = each.value.source_address_prefix
+  destination_address_prefix = each.value.destination_address_prefix
+
+  network_security_group_name = azurerm_network_security_group.private_nsg.name
+  resource_group_name        = var.resource_group.name
+}
+
+resource "azurerm_network_security_rule" "public_nsg_rules" {
+  for_each = { for rule in var.public_nsg_rules : rule.name => rule }
+
+  name                        = each.value.name
+  priority                    = each.value.priority
+  direction                   = each.value.direction
+  access                      = each.value.access
+  protocol                    = each.value.protocol
+  source_port_range           = each.value.source_port_range
+  destination_port_range      = each.value.destination_port_range
+  source_address_prefix      = each.value.source_address_prefix
+  destination_address_prefix = each.value.destination_address_prefix
+
+  network_security_group_name = azurerm_network_security_group.public_nsg.name
+  resource_group_name        = var.resource_group.name
+}
+
 resource "azurerm_subnet_network_security_group_association" "private_assoc" {
   for_each = {
     for s in var.subnets : s.name => s if s.type == "private"
