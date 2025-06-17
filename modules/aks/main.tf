@@ -1,3 +1,7 @@
+locals {
+  dns_service_ip = cidrhost(var.network_profile.service_cidr, 10)
+}
+
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = var.cluster_name
   location            = var.resource_group.location
@@ -31,6 +35,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   azure_policy_enabled = var.azure_policy_enabled
   cost_analysis_enabled = var.cost_analysis_enabled
   http_application_routing_enabled = var.http_application_routing_enabled
+  web_app_routing {
+    dns_zone_ids = []
+  }
 
   monitor_metrics {
     
@@ -39,11 +46,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   network_profile {
     network_plugin    = var.network_profile.network_plugin
     network_mode    = var.network_profile.network_mode
+    network_plugin_mode    = var.network_profile.network_plugin_mode
     load_balancer_sku = var.network_profile.load_balancer_sku
     network_policy    = var.network_profile.network_policy
-    dns_service_ip    = var.network_profile.dns_service_ip
     service_cidr      = var.network_profile.service_cidr
     pod_cidr = var.network_profile.pod_cidr
+    dns_service_ip = local.dns_service_ip
   }
 
   workload_identity_enabled = var.workload_identity_enabled

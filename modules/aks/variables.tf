@@ -6,6 +6,7 @@ variable "cluster_name" {
 variable "dns_prefix" {
   description = "DNS prefix for AKS cluster."
   type        = string
+  default = "myekscluster"
 }
 
 variable "automatic_upgrade_channel" {
@@ -17,13 +18,13 @@ variable "automatic_upgrade_channel" {
 variable "kubernetes_version" {
   description = "AKS Kubernetes version."
   type        = string
-  default     = "1.29.2"
+  default     = "1.33.0"
 }
 
 variable "sku_tier" {
   description = "AKS SKU Tier (Free or Paid)."
   type        = string
-  default     = "Free"
+  default     = "Standard"
 }
 
 variable "private_cluster_enabled" {
@@ -53,7 +54,7 @@ variable "cost_analysis_enabled" {
 variable http_application_routing_enabled {
   description = "Enable HTTP application routing."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "oidc_issuer_enabled" {
@@ -112,7 +113,6 @@ variable "network_profile" {
     network_policy     = optional(string, "azure")
     service_cidr       = string
   })
-  default = {}
 }
 
 variable "resource_group" {
