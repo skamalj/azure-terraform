@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-head
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-head
+  template:
+    metadata:
+      labels:
+        app: vllm-head
+    spec:
+      containers:
+        - name: vllm-head
+          image: vllm/vllm-openai:latest
+          command: ["/bin/bash", "-c"]
+          args:
+            - ray start --head --port=6379 --block
+          ports:
+            - containerPort: 6379
+            - containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache-pvc
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 10Gi

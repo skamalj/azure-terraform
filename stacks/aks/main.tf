@@ -42,7 +42,7 @@ module "aks" {
   default_node_pool = {
     name = "default"
     vm_size = "Standard_D2s_v3"
-    node_count = 2
+    node_count = 1
     vnet_subnet_id = module.vnet.subnets["private-subnet"].id
   }
   network_profile = {
@@ -82,4 +82,17 @@ resource "azurerm_role_assignment" "allow_aks_access" {
   scope                = module.aks.aks_cluster.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"  # Cluster Admin
   principal_id         = data.azurerm_client_config.current.object_id
+}
+
+
+module "nodepool" {
+  source = "../../modules/akspool"
+  pool_name              = "systempool01"
+  kubernetes_cluster_id  = module.aks.aks_cluster.id
+  mode                   = "User"
+  node_labels            = {
+    workload = "LLM"
+  }
+  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
+  priority = "Spot"
 }
