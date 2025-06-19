@@ -50,8 +50,9 @@ spec:
   ports:
     - port: 6379
       targetPort: 6379
-      name: ray
-    - port: 8000
-      targetPort: 8000
-      name: api
+      name: ray-node
+    - port: 10001
+      targetPort: 10001
+      name: ray-client
   type: ClusterIP
+

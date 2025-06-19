@@ -1,0 +1,14 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azureblob-csi
+provisioner: blob.csi.azure.com
+parameters:
+  containerName: models
+  storageAccount: <your-storage-account-name>
+  protocol: fuse
+mountOptions:
+  - --file-cache-timeout-in-seconds=120
+  - --use-attr-cache=true
+reclaimPolicy: Retain
+volumeBindingMode: Immediate

@@ -25,6 +25,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
     expander                         = var.autoscaler_profile.expander
   }
 
+  storage_profile {
+    blob_driver_enabled = true
+  }
+
   role_based_access_control_enabled = var.rbac_enabled
   azure_active_directory_role_based_access_control {
     azure_rbac_enabled = var.azure_active_directory_role_based_access_control.azure_rbac_enabled

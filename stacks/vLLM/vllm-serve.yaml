@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-serve
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-serve
+  template:
+    metadata:
+      labels:
+        app: vllm-serve
+    spec:
+      containers:
+        - name: vllm-serve
+          image: vllm/vllm-openai:latest
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              vllm serve /models/llm \
+                --tensor-parallel-size 2 \
+                --pipeline-parallel-size 1 \
+                --port 8000
+          env:
+            - name: RAY_ADDRESS
+              value: ray://vllm-head.default.svc.cluster.local:10001
+            - name: HF_HOME
+              value: /root/.cache/huggingface
+          ports:
+            - containerPort: 8000
+              name: api
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "0.5"
+              memory: "1Gi"
+          volumeMounts:
+            - name: model-volume
+              mountPath: /models/llm
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: model-volume
+          persistentVolumeClaim:
+            claimName: azure-blob-model-pvc  # Azure Blob Storage mounted here
+        - name: hf-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-serve
+spec:
+  selector:
+    app: vllm-serve
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http

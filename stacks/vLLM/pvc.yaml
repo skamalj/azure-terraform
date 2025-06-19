@@ -8,3 +8,16 @@ spec:
   resources:
     requests:
       storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azure-blob-model-pvc
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: azureblob-csi
+  resources:
+    requests:
+      storage: 100Gi
+
