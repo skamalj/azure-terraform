@@ -59,6 +59,40 @@ resource "azurerm_kubernetes_cluster" "aks" {
   identity {
     type = var.identity_type
   }
-
+  oms_agent {
+    log_analytics_workspace_id = azurerm_log_analytics_workspace.aks.id
+  }
   tags = var.tags
+}
+
+resource "azurerm_log_analytics_workspace" "aks" {
+  name                = "${var.cluster_name}-logs"
+  location            = var.resource_group.location
+  resource_group_name = var.resource_group.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = var.tags
+}
+
+resource "azurerm_monitor_diagnostic_setting" "aks" {
+  name                       = "${var.cluster_name}-diagnostics"
+  target_resource_id         = azurerm_kubernetes_cluster.aks.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.aks.id
+
+  dynamic "enabled_log" {
+    for_each = [
+      "kube-apiserver",
+      "kube-audit",
+      "kube-controller-manager",
+      "kube-scheduler",
+      "cluster-autoscaler"
+    ]
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
 }

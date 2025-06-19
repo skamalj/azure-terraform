@@ -42,7 +42,7 @@ module "aks" {
   default_node_pool = {
     name = "default"
     vm_size = "Standard_D2s_v3"
-    node_count = 1
+    node_count = 2
     vnet_subnet_id = module.vnet.subnets["private-subnet"].id
   }
   network_profile = {
@@ -87,8 +87,9 @@ resource "azurerm_role_assignment" "allow_aks_access" {
 
 module "nodepool" {
   source = "../../modules/akspool"
-  pool_name              = "systempool01"
+  pool_name              = "userpool01"
   kubernetes_cluster_id  = module.aks.aks_cluster.id
+  vm_size = "Standard_NV8as_v4"
   mode                   = "User"
   node_labels            = {
     workload = "LLM"
