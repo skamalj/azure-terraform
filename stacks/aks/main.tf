@@ -1,11 +1,15 @@
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
   subscription_id = "3cee1ba8-a6e9-41b5-b6a7-fd6862ae5e92"
 }
 
 resource "azurerm_resource_group" "rg" {
   name     = "myaks-rg"
-  location = "Central India"
+  location = "Southeast Asia"
 }
 
 module "vnet" {
@@ -89,11 +93,11 @@ module "nodepool" {
   source = "../../modules/akspool"
   pool_name              = "userpool01"
   kubernetes_cluster_id  = module.aks.aks_cluster.id
-  vm_size = "Standard_NV8as_v4"
+  vm_size = "Standard_NC4as_T4_v3"
   mode                   = "User"
   node_labels            = {
     workload = "LLM"
   }
   vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-  priority = "Spot"
+  priority = "Regular"
 }
