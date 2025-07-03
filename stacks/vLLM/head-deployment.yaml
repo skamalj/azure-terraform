@@ -12,33 +12,30 @@ spec:
       labels:
         app: vllm-head
     spec:
+      nodeSelector:
+            workload: rayHead
+            kubernetes.azure.com/scalesetpriority: spot
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
       containers:
         - name: vllm-head
           image: vllm/vllm-openai:latest
           command: ["/bin/bash", "-c"]
           args:
-            - ray start --head --port=6379 --block
+            - ray start --head --port=6379 --block --num-cpus 0
           ports:
             - containerPort: 6379
-            - containerPort: 8000
+            - containerPort: 10001
           resources:
             requests:
-              nvidia.com/gpu: 1
+              cpu: "500m"
+              memory: "1500Mi"
             limits:
-              nvidia.com/gpu: 1
-          volumeMounts:
-            - name: hf-cache
-              mountPath: /root/.cache/huggingface
-            - name: shm
-              mountPath: /dev/shm
-      volumes:
-        - name: hf-cache
-          persistentVolumeClaim:
-            claimName: hf-cache-pvc
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 10Gi
+              cpu: "500m"
+              memory: "1500Mi"
 ---
 apiVersion: v1
 kind: Service

@@ -18,7 +18,7 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
-              vllm serve /models/llm \
+              vllm serve /models/llms \
                 --tensor-parallel-size 2 \
                 --pipeline-parallel-size 1 \
                 --port 8000
@@ -39,7 +39,8 @@ spec:
               memory: "1Gi"
           volumeMounts:
             - name: model-volume
-              mountPath: /models/llm
+              mountPath: /models/llms
+              readOnly: true
             - name: hf-cache
               mountPath: /root/.cache/huggingface
             - name: shm

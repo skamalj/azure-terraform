@@ -1,11 +1,12 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: azureblob-csi
+  name: azureblob-csi-sea
 provisioner: blob.csi.azure.com
 parameters:
   containerName: models
-  storageAccount: <your-storage-account-name>
+  storageAccount: skamaljhuggingfacesea
+  resourceGroup: azadmin
   protocol: fuse
 mountOptions:
   - --file-cache-timeout-in-seconds=120

@@ -16,7 +16,7 @@ metadata:
 spec:
   accessModes:
     - ReadOnlyMany
-  storageClassName: azureblob-csi
+  storageClassName: azureblob-csi-sea
   resources:
     requests:
       storage: 100Gi

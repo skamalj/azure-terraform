@@ -89,15 +89,49 @@ resource "azurerm_role_assignment" "allow_aks_access" {
 }
 
 
-module "nodepool" {
+module "nodepool_head" {
   source = "../../modules/akspool"
   pool_name              = "userpool01"
   kubernetes_cluster_id  = module.aks.aks_cluster.id
-  vm_size = "Standard_NC4as_T4_v3"
+  #vm_size = "Standard_NC4as_T4_v3"
+  vm_size = "standard_d2d_v4"
+  node_count = 1
   mode                   = "User"
   node_labels            = {
-    workload = "LLM"
+    workload = "rayHead"
   }
   vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-  priority = "Regular"
+  priority = "Spot"
+}
+
+module "nodepool_worker" {
+  source = "../../modules/akspool"
+  pool_name              = "userpool02"
+  kubernetes_cluster_id  = module.aks.aks_cluster.id
+  #vm_size = "Standard_NC4as_T4_v3"
+  vm_size = "standard_d2d_v4"
+  node_count = 1
+  mode                   = "User"
+  node_labels            = {
+    workload = "rayWorker"
+  }
+  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
+}
+
+
+data "azurerm_storage_account" "target" {
+  name                = "skamaljhuggingfacesea"
+  resource_group_name = "azadmin"
+}
+
+# Contributor Role Definition ID (built-in)
+data "azurerm_role_definition" "contributor" {
+  name = "Contributor"
+  scope = data.azurerm_storage_account.target.id
+}
+
+resource "azurerm_role_assignment" "storage_contributor" {
+  scope              = data.azurerm_storage_account.target.id
+  role_definition_id = data.azurerm_role_definition.contributor.id
+  principal_id       = module.aks.aks_cluster.identity[0].principal_id
 }

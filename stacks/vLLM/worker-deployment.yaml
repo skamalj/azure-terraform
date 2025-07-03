@@ -12,25 +12,39 @@ spec:
       labels:
         app: vllm-worker
     spec:
+      nodeSelector:
+          workload: rayWorker
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
       containers:
         - name: vllm-worker
           image: vllm/vllm-openai:latest
           command: ["/bin/bash", "-c"]
           args:
-            - ray start --address=vllm-head.default.svc.cluster.local:6379 --block
-          ports:
-            - containerPort: 6379
-            - containerPort: 8000
+            - ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 1
+          #resources:
+          #  requests:
+          #    nvidia.com/gpu: 1
+          #  limits:
+          #    nvidia.com/gpu: 1
           resources:
             requests:
-              nvidia.com/gpu: 1
+              cpu: "500m"
+              memory: "1500Mi"
             limits:
-              nvidia.com/gpu: 1
+              cpu: "500m"
+              memory: "1500Mi"
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
             - name: shm
               mountPath: /dev/shm
+            - name: blob-models
+              mountPath: /models/llms
+              readOnly: true
       volumes:
         - name: hf-cache
           emptyDir: {}
@@ -38,3 +52,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 10Gi
+        - name: blob-models
+          persistentVolumeClaim:
+            claimName: azure-blob-model-pvc
