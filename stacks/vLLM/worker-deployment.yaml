@@ -24,19 +24,19 @@ spec:
           image: vllm/vllm-openai:latest
           command: ["/bin/bash", "-c"]
           args:
-            - ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 1
-          #resources:
-          #  requests:
-          #    nvidia.com/gpu: 1
-          #  limits:
-          #    nvidia.com/gpu: 1
+            - ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 2
           resources:
             requests:
-              cpu: "500m"
-              memory: "1500Mi"
+              nvidia.com/gpu: 1
             limits:
-              cpu: "500m"
-              memory: "1500Mi"
+              nvidia.com/gpu: 1
+          #resources:
+          #  requests:
+          #    cpu: "2000m"
+          #    memory: "4500Mi"
+          #  limits:
+          #    cpu: "2000m"
+          #    memory: "4500Mi"
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
@@ -51,7 +51,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 10Gi
+            sizeLimit: 4Gi
         - name: blob-models
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc

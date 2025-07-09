@@ -12,21 +12,41 @@ spec:
       labels:
         app: vllm-serve
     spec:
+      nodeSelector:
+            workload: rayHead
+            kubernetes.azure.com/scalesetpriority: spot
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
       containers:
         - name: vllm-serve
-          image: vllm/vllm-openai:latest
+          image: ghcr.io/skamalj/vllm-api-cpu:latest
           command: ["/bin/bash", "-c"]
           args:
             - |
-              vllm serve /models/llms \
+              pip install ray[client]==2.47.1 && python3 -m vllm.entrypoints.api_server \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --swap_space 2 \
+                --model "/models/llms/mistral-7b/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db" \
+                --served-model-name "my-mistral-model" \
+                --distributed-executor-backend "ray" \
                 --tensor-parallel-size 2 \
-                --pipeline-parallel-size 1 \
-                --port 8000
+                --gpu-memory-utilization 0.9 \
+                --max-model-len 4096 \
+                --trust-remote-code \
+                --device "cpu" \
+                --ray-address ray://vllm-head.default.svc.cluster.local:10001 \
+                --disable-log-requests
           env:
-            - name: RAY_ADDRESS
-              value: ray://vllm-head.default.svc.cluster.local:10001
             - name: HF_HOME
               value: /root/.cache/huggingface
+            - name: VLLM_LOGGING_LEVEL
+              value: DEBUG
+            - name: CUDA_VISIBLE_DEVICES
+              value: ""  # Adjust based on your GPU setup
           ports:
             - containerPort: 8000
               name: api
@@ -35,7 +55,7 @@ spec:
               cpu: "1"
               memory: "2Gi"
             requests:
-              cpu: "0.5"
+              cpu: "1"
               memory: "1Gi"
           volumeMounts:
             - name: model-volume
@@ -43,18 +63,12 @@ spec:
               readOnly: true
             - name: hf-cache
               mountPath: /root/.cache/huggingface
-            - name: shm
-              mountPath: /dev/shm
       volumes:
         - name: model-volume
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc  # Azure Blob Storage mounted here
         - name: hf-cache
           emptyDir: {}
-        - name: shm
-          emptyDir:
-            medium: Memory
-            sizeLimit: 2Gi
 ---
 apiVersion: v1
 kind: Service

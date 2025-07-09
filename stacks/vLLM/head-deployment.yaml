@@ -25,7 +25,7 @@ spec:
           image: vllm/vllm-openai:latest
           command: ["/bin/bash", "-c"]
           args:
-            - ray start --head --port=6379 --block --num-cpus 0
+            - pip install ray[client]==2.47.1 && ray start --head --port=6379 --ray-client-server-port=10001 --block --num-cpus 0
           ports:
             - containerPort: 6379
             - containerPort: 10001
