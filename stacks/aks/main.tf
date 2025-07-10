@@ -113,25 +113,25 @@ module "nodepool_worker" {
   node_count = 1
   mode                   = "User"
   node_labels            = {
-    workload = "rayWorker"
+    workload = "rayWorkerAndAPI"
   }
   vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
 }
 
-#module "nodepool_worker2" {
-#  source = "../../modules/akspool"
-#  pool_name              = "userpool03"
-#  kubernetes_cluster_id  = module.aks.aks_cluster.id
-#  vm_size = "Standard_NC4as_T4_v3"
-#  #vm_size = "standard_d2d_v4"
-#  node_count = 1
-#  mode                   = "User"
-#  node_labels            = {
-#    workload = "rayWorker"
-#  }
-#  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-#  priority = "Regular"
-#}
+module "nodepool_worker2" {
+  source = "../../modules/akspool"
+  pool_name              = "userpool03"
+  kubernetes_cluster_id  = module.aks.aks_cluster.id
+  vm_size = "Standard_NC4as_T4_v3"
+  #vm_size = "standard_d2d_v4"
+  node_count = 1
+  mode                   = "User"
+  node_labels            = {
+    workload = "rayWorker"
+  }
+  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
+  priority = "Regular"
+}
 
 
 data "azurerm_storage_account" "target" {

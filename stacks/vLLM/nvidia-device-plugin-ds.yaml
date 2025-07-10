@@ -14,8 +14,16 @@ spec:
       labels:
         name: nvidia-device-plugin-ds
     spec:
-      nodeSelector:
-          workload: rayWorker
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: workload
+                    operator: In
+                    values:
+                      - rayWorker
+                      - rayWorkerAndAPI
       tolerations:
       - key: "sku"
         operator: "Equal"
