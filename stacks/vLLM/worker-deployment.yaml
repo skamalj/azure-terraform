@@ -24,7 +24,7 @@ spec:
           image: vllm/vllm-openai:latest
           command: ["/bin/bash", "-c"]
           args:
-            - ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 2
+            - pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 4
           resources:
             requests:
               nvidia.com/gpu: 1

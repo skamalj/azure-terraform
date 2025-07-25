@@ -25,21 +25,23 @@ spec:
           command: ["/bin/bash", "-c"]
           ports:
             - containerPort: 8000
+            - containerPort: 9090
           args:
             - |
-              ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 2 && \
+              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 4 && \
               sleep 5 && \
-              pip install ray[client]==2.47.1 && vllm serve \
+              vllm serve \
               /models/llms/mistral-7b/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --swap_space 2 \
+                --swap_space 4 \
                 --served-model-name "my-mistral-model" \
                 --distributed-executor-backend "ray" \
                 --tensor-parallel-size 2 \
+                --pipeline_parallel-size 1 \
                 --gpu-memory-utilization 0.8 \
-                --max-model-len 4096 \
-                --disable-log-requests
+                --max-num-seqs 32 \
+                --max-model-len 4096
           resources:
             requests:
               nvidia.com/gpu: 1
@@ -82,4 +84,7 @@ spec:
     - port: 8000
       targetPort: 8000
       name: vllm-api
+    - port: 9090
+      targetPort: 9090
+      name: vllm-metrics
   type: ClusterIP
