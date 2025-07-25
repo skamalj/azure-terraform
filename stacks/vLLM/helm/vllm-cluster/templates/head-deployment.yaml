@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.head.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.head.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.head.name }}
+    spec:
+      containers:
+        - name: {{ .Values.head.name }}
+          image: "{{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}"
+          imagePullPolicy: {{ .Values.head.image.pullPolicy }}
+          ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: serve
+          resources:
+            limits:
+              cpu: {{ .Values.head.resources.limits.cpu | quote }}
+              memory: {{ .Values.head.resources.limits.memory | quote }}
+            requests:
+              cpu: {{ .Values.head.resources.requests.cpu | quote }}
+              memory: {{ .Values.head.resources.requests.memory | quote }}
+          volumeMounts:
+            - name: model-storage
+              mountPath: {{ .Values.head.volumeMount.mountPath }}
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.head.volumeMount.pvcName }}

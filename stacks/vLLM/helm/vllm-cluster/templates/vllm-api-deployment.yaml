@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.api.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.api.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.api.name }}
+    spec:
+      containers:
+        - name: {{ .Values.api.name }}
+          image: "{{ .Values.api.image }}"
+          imagePullPolicy: {{ .Values.api.imagePullPolicy }}
+          ports:
+            - containerPort: 8000
+              name: api
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.api.resources.limits.gpu }}
+              cpu: {{ .Values.api.resources.limits.cpu | quote }}
+              memory: {{ .Values.api.resources.limits.memory | quote }}
+            requests:
+              nvidia.com/gpu: {{ .Values.api.resources.requests.gpu }}
+              cpu: {{ .Values.api.resources.requests.cpu | quote }}
+              memory: {{ .Values.api.resources.requests.memory | quote }}
+          command:
+            - bash
+            - -c
+            - |
+              ray start --address={{ .Values.api.rayHeadAddress }} --num-cpus={{ .Values.api.numCpus }} && \
+              sleep {{ .Values.api.sleepSeconds }} && \
+              vllm serve {{ .Values.api.modelBasePath }}/{{ .Values.api.modelName }} {{ join " " .Values.api.vllmArgs }}
+          volumeMounts:
+            - name: model-storage
+              mountPath: {{ .Values.api.volumeMount.mountPath }}
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: {{ .Values.api.volumeMount.pvcName }}
