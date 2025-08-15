@@ -132,7 +132,7 @@ module "nodepool_worker2" {
     workload = "rayWorker"
   }
   vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-  #priority = "Regular"
+  priority = "Spot"
 }
 
 

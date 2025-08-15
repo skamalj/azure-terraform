@@ -1,0 +1,33 @@
+# vllm-chart/values.yaml
+
+head:
+  replicaCount: 1
+
+  image:
+    repository: vllm/head
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+
+  env:
+    - name: RAY_DISABLE_DASHBOARD
+      value: "1"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  volumeMounts:
+    - name: model-storage
+      mountPath: /blob
+  volumes:
+    - name: model-storage
+      persistentVolumeClaim:
+        claimName: model-storage-pvc

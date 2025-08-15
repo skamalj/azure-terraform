@@ -21,10 +21,30 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm-worker
-          image: vllm/vllm-openai:latest
+          image: vllm/vllm-openai:v0.8.2
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - ray status 2>/dev/null | grep -i active || exit 1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - ray status 2>/dev/null | grep -i active  || exit 1
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 10
           command: ["/bin/bash", "-c"]
           args:
-            - pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 4
+            - pip install ray[client]==2.47.1  && pip install --upgrade transformers && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 4
           resources:
             requests:
               nvidia.com/gpu: 1
@@ -51,7 +71,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 4Gi
+            sizeLimit: 15Gi
         - name: blob-models
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc

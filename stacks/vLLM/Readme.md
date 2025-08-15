@@ -74,3 +74,8 @@ MIT or Apache 2.0 (your choice)
 ---
 
 If you'd like to generate this chart in a private registry or extend it with other models, open a PR or customize as needed.
+
+DeepSeek-R1-Distill-Qwen-1.5B/snapshots/ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562
+mistral-7b/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db
+Qwen2.5-Omni-7B/snapshots/ae9e1690543ffd5c0221dc27f79834d0294cba00 <<  Not Supported by VLLM >>
+Qwen2.5VL3B/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3

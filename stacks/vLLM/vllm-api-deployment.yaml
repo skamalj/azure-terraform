@@ -21,26 +21,58 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm-api
-          image: vllm/vllm-openai:latest
+          image: vllm/vllm-openai:v0.8.2
           command: ["/bin/bash", "-c"]
+          readinessProbe:
+            httpGet:
+              path: /v1/models  # or /v1/models, or root endpoint if applicable
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - '[ "$(ray status | grep node_ | wc -l)" -eq 3 ]'
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
           ports:
             - containerPort: 8000
             - containerPort: 9090
           args:
             - |
               pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 4 && \
-              sleep 5 && \
-              vllm serve \
-              /models/llms/mistral-7b/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db \
+              sleep 5 && pip install --upgrade transformers && \
+              REQUIRED_NODES=$((2 + 1)) \
+              && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
+              && while true; do \
+                  NODE_COUNT=$(ray status | grep -i "node_" | wc -l); \
+                  if [ "$NODE_COUNT" -ge "$REQUIRED_NODES" ]; then \
+                      echo "Ray cluster has $NODE_COUNT nodes, proceeding."; \
+                      break; \
+                  else \
+                      echo "Ray cluster only has $NODE_COUNT nodes, waiting..."; \
+                      sleep 10; \
+                  fi; \
+              done \
+              && vllm serve \
+              /models/llms/Qwen2.5VL3B/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3 \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --swap_space 4 \
+                --swap_space 10 \
                 --served-model-name "my-mistral-model" \
                 --distributed-executor-backend "ray" \
-                --tensor-parallel-size 2 \
-                --pipeline_parallel-size 1 \
-                --gpu-memory-utilization 0.8 \
+                --tensor-parallel-size 1 \
+                --pipeline_parallel-size 2 \
+                --gpu-memory-utilization 0.9 \
                 --max-num-seqs 32 \
+                --dtype=half \
                 --max-model-len 4096
           resources:
             requests:
@@ -68,7 +100,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 4Gi
+            sizeLimit: 15Gi
         - name: blob-models
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc
