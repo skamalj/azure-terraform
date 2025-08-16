@@ -1,81 +1,27 @@
-# vLLM Helm Chart
+# Benchmark Results of 7B–8B LLMs on T4 and A10 GPUs
 
-This Helm chart deploys a distributed vLLM inference setup on Kubernetes, including:
+This table summarizes the benchmarking of **Mistral-7B**, **Qwen2.5-7B-Instruct**, and **Meta-Llama-3-8B-Instruct** models across **T4** and **A10 GPUs**.  
+The metrics include token throughput, first-token latency (TTFT), cache utilization, and remarks on failures or constraints.  
 
-* `head` node (Ray cluster head)
-* `worker` nodes (Ray workers running vLLM workers)
-* `vllm-api` (vLLM HTTP API server)
-* Persistent Volume Claims and StorageClass for model storage
-
-## Prerequisites
-
-* Kubernetes cluster (with GPU nodes if using GPU scheduling)
-* NVIDIA Device Plugin installed and running (installed manually)
-* Helm v3.0+
-
-## Installation
-
-```bash
-# Clone the chart repo or copy the files
-helm install vllm ./vllm-helm \
-  --set head.numCpus=4 \
-  --set head.image.repository="myregistry/vllm-head" \
-  --set worker.numReplicas=2 \
-  --set worker.vllmArgs="['--model=/models/llms/mistral-7b']" \
-  --set api.modelName="mistral-7b"
-```
-
-## Values
-
-Here are the configurable parameters:
-
-### `head` values
-
-| Parameter               | Description         | Default     |
-| ----------------------- | ------------------- | ----------- |
-| `head.image.repository` | Head pod image repo | `vllm-head` |
-| `head.image.tag`        | Image tag           | `latest`    |
-| `head.numCpus`          | CPUs to allocate    | `4`         |
-
-### `worker` values
-
-| Parameter                 | Description                  | Default       |
-| ------------------------- | ---------------------------- | ------------- |
-| `worker.image.repository` | Worker image repo            | `vllm-worker` |
-| `worker.numReplicas`      | Number of worker pods        | `1`           |
-| `worker.numCpus`          | CPUs to allocate per worker  | `4`           |
-| `worker.vllmArgs`         | Array of CLI args for `vllm` | `[]`          |
-
-### `api` values
-
-| Parameter              | Description              | Default      |
-| ---------------------- | ------------------------ | ------------ |
-| `api.image.repository` | API server image repo    | `vllm-api`   |
-| `api.modelName`        | Model name passed to API | `mistral-7b` |
-| `api.numCpus`          | CPUs for API container   | `2`          |
-
-### Storage
-
-| Parameter           | Description                   | Default      |
-| ------------------- | ----------------------------- | ------------ |
-| `storage.className` | StorageClass for model volume | `model-blob` |
-| `storage.size`      | Size of the PVC               | `100Gi`      |
-
-## Notes
-
-* The NVIDIA device plugin must be applied manually before deploying the chart.
-* `head` must be running before `worker` or `api` connect.
-* `worker` pods have liveness probes checking Ray connectivity.
-
-## License
-
-MIT or Apache 2.0 (your choice)
+Key takeaways:
+- **T4 GPUs** have limited support (no bfloat16, frequent load failures, lower throughput).  
+- **A10 GPUs** achieve much higher throughput and cache utilization, with stable performance across larger sequence lengths.  
+- Misconfigured parameters (like `dtype` or `max_model_len`) often cause failures.  
 
 ---
 
-If you'd like to generate this chart in a private registry or extend it with other models, open a PR or customize as needed.
-
-DeepSeek-R1-Distill-Qwen-1.5B/snapshots/ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562
-mistral-7b/e0bc86c23ce5aae1db576c8cca6f06f1f73af2db
-Qwen2.5-Omni-7B/snapshots/ae9e1690543ffd5c0221dc27f79834d0294cba00 <<  Not Supported by VLLM >>
-Qwen2.5VL3B/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3
+| Model name                | GPU | Pipeline Parallel | No. of seq | Max model Len | dtype   | Token Throughput (per sec) | TTFT (sec) | Cache Utilization % | Result  | Remark                                                                                                                                                  |
+|----------------------------|-----|------------------|------------|---------------|---------|----------------------------|------------|----------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| mistral-7b                 | T4  | 1                |            | 4096          | Not Set |                            |            |                      | Fail    | Bfloat16 is only supported on GPUs with compute capability of at least 8.0. Your Tesla T4 GPU has compute capability 7.5. Use `--dtype=half` instead.    |
+| mistral-7b                 | T4  | 1                |            | 4096          | half    |                            |            |                      | Fail    | Model Load failure                                                                                                                                      |
+| mistral-7b                 | T4  | 2                | 32         | 4096          | half    | 390                        | 2          |                      | Success |                                                                                                                                                         |
+| Qwen2.5-7B-Instruct        | T4  | 2                |            | 4096          | Not set |                            |            |                      | Fail    |                                                                                                                                                         |
+| Qwen2.5-7B-Instruct        | T4  | 2                | 32         | 4096          | half    | 325                        | 2          | 12                   | Success |                                                                                                                                                         |
+| Qwen2.5-7B-Instruct        | T4  | 2                | 128        | 4096          | half    | 320                        | 2          | 12                   | Success |                                                                                                                                                         |
+| Meta-Llama-3-8B-Instruct   | T4  | 2                | 32         | 8192          | half    | 320                        | 2          | 25                   | Success |                                                                                                                                                         |
+| Meta-Llama-3-8B-Instruct   | T4  | 2                | 32         | 4096          | half    | 300                        | 3          | 15                   | Success |                                                                                                                                                         |
+| Meta-Llama-3-8B-Instruct   | A10 | 1                | 64         | 8192          | None    | 700                        | 1          | 60                   | Success |                                                                                                                                                         |
+| Meta-Llama-3-8B-Instruct   | A10 | 1                | 128        | 16384         | None    |                            |            |                      | Failed  | ValueError: User-specified max_model_len (16384) is greater than derived max_model_len (max_position_embeddings=8192 or model_max_length=None).          |
+| Meta-Llama-3-8B-Instruct   | A10 | 1                | 128        | 8192          | None    | 700                        | 1          | 70                   | Success |                                                                                                                                                         |
+| mistral-7b                 | A10 | 1                | 64         | 8192          | None    | 700                        | 0.5        | 50                   | Success |                                                                                                                                                         |
+| Qwen2.5-7B-Instruct        | A10 | 1                | 64         | 8192          | None    | 600                        | 1          | 30                   | Success |                                                                                                                                                         |

@@ -37,8 +37,8 @@ spec:
               command:
                 - /bin/bash
                 - -c
-                - '[ "$(ray status | grep node_ | wc -l)" -eq 3 ]'
-            initialDelaySeconds: 60
+                - '[ "$(ray status | grep node_ | wc -l)" -eq 2 ]'
+            initialDelaySeconds: 120
             periodSeconds: 10
             failureThreshold: 3
             timeoutSeconds: 5
@@ -47,9 +47,9 @@ spec:
             - containerPort: 9090
           args:
             - |
-              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 4 && \
-              sleep 5 && pip install --upgrade transformers && \
-              REQUIRED_NODES=$((2 + 1)) \
+              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 36 && \
+              sleep 5 && pip install transformers==4.50.0 && \
+              REQUIRED_NODES=$((1 + 1)) \
               && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
               && while true; do \
                   NODE_COUNT=$(ray status | grep -i "node_" | wc -l); \
@@ -62,18 +62,17 @@ spec:
                   fi; \
               done \
               && vllm serve \
-              /models/llms/Qwen2.5VL3B/snapshots/66285546d2b821cf421d4f5eb2576359d3770cd3 \
+              /models/llms/Qwen2.5-7B-Instruct \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --swap_space 10 \
+                --swap_space 250 \
                 --served-model-name "my-mistral-model" \
                 --distributed-executor-backend "ray" \
                 --tensor-parallel-size 1 \
-                --pipeline_parallel-size 2 \
+                --pipeline_parallel-size 1 \
                 --gpu-memory-utilization 0.9 \
-                --max-num-seqs 32 \
-                --dtype=half \
-                --max-model-len 4096
+                --max-num-seqs 64 \
+                --max-model-len 8192
           resources:
             requests:
               nvidia.com/gpu: 1
@@ -100,7 +99,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 15Gi
+            sizeLimit: 250Gi
         - name: blob-models
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc

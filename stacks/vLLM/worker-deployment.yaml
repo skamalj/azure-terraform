@@ -39,9 +39,9 @@ spec:
                 - -c
                 - ray status 2>/dev/null | grep -i active  || exit 1
             initialDelaySeconds: 180
-            periodSeconds: 20
+            periodSeconds: 10
             failureThreshold: 3
-            timeoutSeconds: 10
+            timeoutSeconds: 5
           command: ["/bin/bash", "-c"]
           args:
             - pip install ray[client]==2.47.1  && pip install --upgrade transformers && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 4

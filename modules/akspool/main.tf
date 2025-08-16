@@ -13,4 +13,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "akspool" {
     max_count = var.max_count
     min_count = var.min_count
     node_count = var.node_count
+    lifecycle {
+    ignore_changes = [
+      eviction_policy
+    ]
+  }
 }
