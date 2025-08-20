@@ -1,4 +1,4 @@
-# vLLM Kubernetes Deployment with Prometheus Monitoring
+# Scaling and Benchmarking LLM Inference with vLLM and Ray on Azure Kubernetes Service
 
 This repository provides Kubernetes (Specific to Azure Kubernetes Service, due to storage CSI driver) manifests and scripts to deploy a **vLLM inference cluster** with GPU scheduling, persistent storage, and Prometheus-based monitoring.
 
