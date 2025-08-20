@@ -24,11 +24,10 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: workload
+                  - key: accelerator
                     operator: In
                     values:
-                      - rayWorker
-                      - rayWorkerAndAPI
+                      - nvidia
       tolerations:
       - key: "sku"
         operator: "Equal"

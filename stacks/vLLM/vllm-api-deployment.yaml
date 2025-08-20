@@ -47,7 +47,7 @@ spec:
             - containerPort: 9090
           args:
             - |
-              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 36 && \
+              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 40 && \
               sleep 5 && pip install transformers==4.50.0 && \
               REQUIRED_NODES=$((1 + 1)) \
               && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
@@ -62,17 +62,16 @@ spec:
                   fi; \
               done \
               && vllm serve \
-              /models/llms/Qwen2.5-7B-Instruct \
+              /models/llms/olmOCR-7B-0225-preview \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --swap_space 250 \
-                --served-model-name "my-mistral-model" \
+                --swap_space 100 \
+                --served-model-name "olmOCR-7B-0225-preview" \
                 --distributed-executor-backend "ray" \
                 --tensor-parallel-size 1 \
                 --pipeline_parallel-size 1 \
-                --gpu-memory-utilization 0.9 \
-                --max-num-seqs 64 \
-                --max-model-len 8192
+                --gpu-memory-utilization 0.95 \
+                --max-num-seqs 64
           resources:
             requests:
               nvidia.com/gpu: 1

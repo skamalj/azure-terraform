@@ -44,7 +44,7 @@ spec:
             timeoutSeconds: 5
           command: ["/bin/bash", "-c"]
           args:
-            - pip install ray[client]==2.47.1  && pip install --upgrade transformers && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 4
+            - pip install ray[client]==2.47.1  && pip install --upgrade transformers && ray start --address=vllm-head.default.svc.cluster.local:6379 --block --num-cpus 36
           resources:
             requests:
               nvidia.com/gpu: 1
