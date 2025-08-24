@@ -116,8 +116,8 @@ module "nodepool_worker" {
   kubernetes_cluster_id  = module.aks.aks_cluster.id
   count  = var.enable_nodepool_api ? 1 : 0
   #vm_size = "Standard_NC40ads_H100_v5"
-  vm_size = "Standard_NC24ads_A100_v4"
-  #vm_size = "Standard_NV36ads_A10_v5"
+  #vm_size = "Standard_NC24ads_A100_v4"
+  vm_size = "Standard_NV36ads_A10_v5"
   #vm_size = "Standard_NC4as_T4_v3"
   #vm_size = "standard_d2d_v4"
   node_count = 1
@@ -140,6 +140,7 @@ module "nodepool_worker2" {
   count  = var.enable_nodepool_worker2 ? 1 : 0
   pool_name              = "userpool03"
   kubernetes_cluster_id  = module.aks.aks_cluster.id
+  #vm_size = "Standard_NC24ads_A100_v4"
   vm_size = "Standard_NV36ads_A10_v5"
   #vm_size = "Standard_NC4as_T4_v3"
   #vm_size = "Standard_NV18ads_A10_v5"

@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-api
+  template:
+    metadata:
+      labels:
+        app: vllm-api
+    spec:
+      nodeSelector:
+          workload: rayWorkerAndAPI
+      tolerations:
+        - key: "kubernetes.azure.com/scalesetpriority"
+          operator: "Equal"
+          value: "spot"
+          effect: "NoSchedule"
+      containers:
+        - name: vllm-api
+          image: vllm/vllm-openai:v0.9.1
+          command: ["/bin/bash", "-c"]
+          readinessProbe:
+            httpGet:
+              path: /v1/models  # or /v1/models, or root endpoint if applicable
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - '[ "$(ray status | grep node_ | wc -l)" -eq 2 ]'
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          ports:
+            - containerPort: 8000
+            - containerPort: 9090
+          args:
+            - |
+              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 36 && \
+              sleep 5 && pip install transformers==4.52.0 && \
+              REQUIRED_NODES=$((1 + 2)) \
+              && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
+              && while true; do \
+                  NODE_COUNT=$(ray status | grep -i "node_" | wc -l); \
+                  if [ "$NODE_COUNT" -ge "$REQUIRED_NODES" ]; then \
+                      echo "Ray cluster has $NODE_COUNT nodes, proceeding."; \
+                      break; \
+                  else \
+                      echo "Ray cluster only has $NODE_COUNT nodes, waiting..."; \
+                      sleep 10; \
+                  fi; \
+              done \
+              && MASTER_ADDR=0.0.0.0 MASTER_PORT=29500 vllm serve \
+              /models/llms/Qwen3-30B-A3B-Thinking-2507-AWQ-4bit \
+                --enable-expert-parallel \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --swap_space 100 \
+                --served-model-name "Qwen3-30B-A3B-Thinking-2507-AWQ-4bit" \
+                --distributed-executor-backend "ray" \
+                --tensor-parallel-size 1 \
+                --pipeline_parallel-size 1 \
+                --data-parallel-size 2 \
+                --data-parallel-size-local 1 \
+                --data-parallel-address 0.0.0.0 \
+                --gpu-memory-utilization 0.8 \
+                --max-num-seqs 6 \
+                --max-model-len 32768
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+            limits:
+              nvidia.com/gpu: 1
+          #resources:
+          #  requests:
+          #    cpu: "2000m"
+          #    memory: "4500Mi"
+          #  limits:
+          #    cpu: "2000m"
+          #    memory: "4500Mi"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+            - name: shm
+              mountPath: /dev/shm
+            - name: blob-models
+              mountPath: /models/llms
+              readOnly: true
+      volumes:
+        - name: hf-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi
+        - name: blob-models
+          persistentVolumeClaim:
+            claimName: azure-blob-model-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-api
+spec:
+  selector:
+    app: vllm-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: vllm-api
+    - port: 54479
+      targetPort: 54479
+      name: vllm-ep
+    - port: 9090
+      targetPort: 9090
+      name: vllm-metrics
+  type: ClusterIP
