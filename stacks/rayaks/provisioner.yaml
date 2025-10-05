@@ -1,0 +1,173 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: cpu-pool
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["linux"]
+        - key: "karpenter.azure.com/sku-name"
+          operator: In
+          values: ["Standard_D2s_v3", "Standard_D4s_v3", "standard_d2d_v4"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AKSNodeClass
+        name: cpu-class
+  limits:
+    cpu: 8
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.azure.com/v1beta1
+kind: AKSNodeClass
+metadata:
+  name: cpu-class
+spec:
+  imageFamily: Ubuntu2204
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-pool-t4
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["linux"]
+        - key: "karpenter.azure.com/sku-name"
+          operator: In
+          values: ["Standard_NC4as_T4_v3", "Standard_NC8as_T4_v3"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+      taints:
+        - key: "nvidia.com/gpu"
+          value: "true"
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AzureNodeClass
+        name: gpu-class
+  limits:
+    cpu: 100
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-pool-a10
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["linux"]
+        - key: "karpenter.azure.com/sku-name"
+          operator: In
+          values: ["Standard_NV36ads_A10_v5"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+      taints:
+        - key: "nvidia.com/gpu"
+          value: "true"
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AzurenodeClass
+        name: gpu-class
+  limits:
+    cpu: 100
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-pool-h100
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["linux"]
+        - key: "karpenter.azure.com/sku-name"
+          operator: In
+          values: ["Standard_NC40ads_H100_v5"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+      taints:
+        - key: "nvidia.com/gpu"
+          value: "true"
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AzurenodeClass
+        name: gpu-class
+  limits:
+    cpu: 100
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-pool-a100
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["linux"]
+        - key: "karpenter.azure.com/sku-name"
+          operator: In
+          values: ["Standard_NC24ads_A100_v4"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["spot", "on-demand"]
+      taints:
+        - key: "nvidia.com/gpu"
+          value: "true"
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AKSNodeClass
+        name: gpu-class
+  limits:
+    cpu: 100
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.azure.com/v1beta1
+kind: AKSNodeClass
+metadata:
+  name: gpu-class
+spec:
+  imageFamily: Ubuntu2204

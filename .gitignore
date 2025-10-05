@@ -3,6 +3,7 @@
 *.tfvars
 .terraform/
 *.backup
+*.pdf
 *.bak
 *.swp
 *.pem

@@ -1,0 +1,121 @@
+# https://docs.ray.io/en/latest/serve/api/doc/ray.serve.llm.LLMConfig.html#ray.serve.llm.LLMConfig
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: ray-serve-llm
+spec:
+  serveConfigV2: |
+    applications:
+    - name: llms
+      import_path: ray.serve.llm:build_openai_app
+      route_prefix: "/"
+      args:
+        llm_configs:
+        - model_loading_config:
+            model_id: InternVL3_5-14B-HF
+            model_source: "/models/InternVL3_5-14B-HF/"
+            trust_remote_code: true
+          engine_kwargs:
+            max_model_len: 8192
+            device: auto
+            gpu_memory_utilization: 0.9
+            tensor_parallel_size: 1 
+            swap_space: 75
+          deployment_config:
+            num_replicas: 1
+            max_ongoing_requests: 32
+          resources_per_bundle:
+            CPU: 16
+            GPU: 1
+  rayClusterConfig:
+    rayVersion: "2.46.0"
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+        num-gpus: "0"
+        metrics-export-port: "8080"
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: cpu-pool
+          volumes:
+          - name: models-storage-volume
+            persistentVolumeClaim:
+              claimName: azure-blob-model-pvc
+          containers:
+          - name: ray-head
+            image: rayproject/ray-llm:2.49.2-py311-cu128
+            volumeMounts:
+            - name: models-storage-volume
+              mountPath: /models
+            env:
+              - name: RAY_GRAFANA_IFRAME_HOST
+                value: http://127.0.0.1:3000
+              - name: RAY_GRAFANA_HOST
+                value: http://prometheus-grafana.prometheus-system.svc:80
+              - name: RAY_PROMETHEUS_HOST
+                value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+            ports:
+            - containerPort: 8000
+              name: serve
+              protocol: TCP
+            - containerPort: 8080
+              name: metrics
+              protocol: TCP
+            - containerPort: 6379
+              name: gcs
+              protocol: TCP
+            - containerPort: 8265
+              name: dashboard
+              protocol: TCP
+            - containerPort: 10001
+              name: client
+              protocol: TCP
+            resources:
+              limits:
+                cpu: 3
+              requests:
+                cpu: 3
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 3
+      groupName: gpu-group
+      rayStartParams:
+        num-gpus: "1"
+        num-cpus: "20"
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: gpu-pool-a100
+          tolerations:
+            - key: "nvidia.com/gpu"
+              operator: "Equal"
+              value: "true"
+              effect: "NoSchedule"
+          volumes:
+          - name: models-storage-volume
+            persistentVolumeClaim:
+              claimName: azure-blob-model-pvc
+          - name: shm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 100Gi
+          containers:
+          - name: ray-worker
+            image: rayproject/ray-llm:2.49.2-py311-cu128
+            volumeMounts:
+            - name: models-storage-volume
+              mountPath: /models
+            - name: shm
+              mountPath: /dev/shm
+            resources:
+              limits:
+                cpu: 16
+                memory: 150Gi
+                nvidia.com/gpu: "1"
+              requests:
+                cpu: 16
+                memory: 150Gi
+                nvidia.com/gpu: "1"
+

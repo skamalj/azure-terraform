@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-cache-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azure-blob-model-pvc
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: azureblob-csi-sea
+  resources:
+    requests:
+      storage: 100Gi
+
