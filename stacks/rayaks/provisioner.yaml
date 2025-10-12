@@ -61,7 +61,7 @@ spec:
           effect: NoSchedule
       nodeClassRef:
         group: karpenter.azure.com
-        kind: AzureNodeClass
+        kind: AKSNodeClass
         name: gpu-class
   limits:
     cpu: 100
@@ -95,7 +95,7 @@ spec:
           effect: NoSchedule
       nodeClassRef:
         group: karpenter.azure.com
-        kind: AzurenodeClass
+        kind: AKSNodeClass
         name: gpu-class
   limits:
     cpu: 100
@@ -126,7 +126,7 @@ spec:
           effect: NoSchedule
       nodeClassRef:
         group: karpenter.azure.com
-        kind: AzurenodeClass
+        kind: AKSNodeClass
         name: gpu-class
   limits:
     cpu: 100
@@ -147,7 +147,7 @@ spec:
           values: ["linux"]
         - key: "karpenter.azure.com/sku-name"
           operator: In
-          values: ["Standard_NC24ads_A100_v4"]
+          values: ["Standard_NC24ads_A100_v4", "Standard_NC48ads_A100_v4"]
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["spot", "on-demand"]

@@ -128,3 +128,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_diagnostics" {
+  description = "Enable or disable AKS diagnostic settings"
+  type        = bool
+  default     = false
+}

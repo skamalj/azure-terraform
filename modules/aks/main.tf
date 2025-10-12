@@ -79,6 +79,8 @@ resource "azurerm_log_analytics_workspace" "aks" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
+  count = var.enable_diagnostics ? 1 : 0
+
   name                       = "${var.cluster_name}-diagnostics"
   target_resource_id         = azurerm_kubernetes_cluster.aks.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.aks.id
