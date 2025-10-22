@@ -11,10 +11,9 @@ spec:
       route_prefix: "/"
       args:
         llm_configs:
-        - accelerator_type: H100
-          model_loading_config:
-            model_id: InternVL3_5-14B-HF
-            model_source: "/models/InternVL3_5-14B-HF/"
+        - model_loading_config:
+            model_id: DeepSeek-OCR
+            model_source: "/models/DeepSeek-OCR/"
           engine_kwargs:
             gpu_memory_utilization: 0.95
             tensor_parallel_size: 1 
@@ -26,19 +25,6 @@ spec:
             max_ongoing_requests: 32
             ray_actor_options:
               num_cpus: 16
-        - accelerator_type: T4
-          model_loading_config:
-            model_id: MinerU2.5-2509-1.2B
-            model_source: "/models/MinerU2.5-2509-1.2B/MinerU2.5-2509-1.2B/"
-          engine_kwargs:
-            gpu_memory_utilization: 0.9
-            tensor_parallel_size: 1 
-            swap_space: 4
-          deployment_config:
-            num_replicas: 1
-            max_ongoing_requests: 4
-            ray_actor_options:
-              num_cpus: 4
   rayClusterConfig:
     rayVersion: "2.50.0"
     headGroupSpec:
@@ -56,7 +42,7 @@ spec:
               claimName: azure-blob-model-pvc
           containers:
           - name: ray-head
-            image:  rayproject/ray-llm:2.49.2-py311-cu128
+            image:  rayproject/ray-llm:2.50.0-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -103,7 +89,7 @@ spec:
       template:
         spec:
           nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-h100
+            karpenter.sh/nodepool: gpu-pool-a100
           tolerations:
             - key: "nvidia.com/gpu"
               operator: "Equal"
@@ -119,7 +105,7 @@ spec:
               sizeLimit: 100Gi
           containers:
           - name: ray-worker
-            image:  rayproject/ray-llm:2.49.2-py311-cu128
+            image:  rayproject/ray-llm:2.50.0-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -134,45 +120,4 @@ spec:
                 cpu: 16
                 memory: 150Gi
                 nvidia.com/gpu: "1"
-    - replicas: 1
-      minReplicas: 1
-      maxReplicas: 3
-      groupName: gpu-group-t4
-      rayStartParams:
-        num-gpus: "1"
-        num-cpus: "4"
-      template:
-        spec:
-          nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-t4
-          tolerations:
-            - key: "nvidia.com/gpu"
-              operator: "Equal"
-              value: "true"
-              effect: "NoSchedule"
-          volumes:
-          - name: models-storage-volume
-            persistentVolumeClaim:
-              claimName: azure-blob-model-pvc
-          - name: shm
-            emptyDir:
-              medium: Memory
-              sizeLimit: 20Gi
-          containers:
-          - name: ray-worker
-            image:  rayproject/ray-llm:2.49.2-py311-cu128
-            volumeMounts:
-            - name: models-storage-volume
-              mountPath: /models
-            - name: shm
-              mountPath: /dev/shm
-            resources:
-              limits:
-                cpu: 4
-                memory: 20Gi
-                nvidia.com/gpu: "1"
-              requests:
-                cpu: 4
-                memory: 20Gi
-                nvidia.com/gpu: "1"
-
+    

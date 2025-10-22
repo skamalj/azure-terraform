@@ -116,8 +116,8 @@ module "nodepool_worker" {
   kubernetes_cluster_id  = module.aks.aks_cluster.id
   count  = var.enable_nodepool_api ? 1 : 0
   #vm_size = "Standard_NC40ads_H100_v5"
-  #vm_size = "Standard_NC24ads_A100_v4"
-  vm_size = "Standard_NV36ads_A10_v5"
+  vm_size = "Standard_NC24ads_A100_v4"
+  #vm_size = "Standard_NV36ads_A10_v5"
   #vm_size = "Standard_NC4as_T4_v3"
   #vm_size = "standard_d2d_v4"
   node_count = 1
@@ -154,22 +154,22 @@ module "nodepool_worker2" {
   priority = "Spot"
 }
 
-module "nodepool_worker3" {
-  source = "../../modules/akspool"
-  pool_name              = "userpool04"
-  kubernetes_cluster_id  = module.aks.aks_cluster.id
-  #vm_size = "Standard_NV36ads_A10_v5"
-  vm_size = "Standard_NC4as_T4_v3"
-  #vm_size = "Standard_NV18ads_A10_v5"
-  #vm_size = "standard_d2d_v4"
-  node_count = 1
-  mode                   = "User"
-  node_labels            = {
-    workload = "olmOCRApi"
-  }
-  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-  priority = "Spot"
-}
+#module "nodepool_worker3" {
+#  source = "../../modules/akspool"
+#  pool_name              = "userpool04"
+#  kubernetes_cluster_id  = module.aks.aks_cluster.id
+#  #vm_size = "Standard_NV36ads_A10_v5"
+#  vm_size = "Standard_NC4as_T4_v3"
+#  #vm_size = "Standard_NV18ads_A10_v5"
+#  #vm_size = "standard_d2d_v4"
+#  node_count = 1
+#  mode                   = "User"
+#  node_labels            = {
+#    workload = "olmOCRApi"
+#  }
+#  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
+#  priority = "Spot"
+#}
 
 data "azurerm_storage_account" "target" {
   name                = "skamaljhuggingfacesea"

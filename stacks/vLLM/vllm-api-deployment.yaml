@@ -21,7 +21,7 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm-api
-          image: vllm/vllm-openai:v0.8.2
+          image: vllm/vllm-openai:v0.11.0
           command: ["/bin/bash", "-c"]
           readinessProbe:
             httpGet:
@@ -47,8 +47,8 @@ spec:
             - containerPort: 9090
           args:
             - |
-              pip install ray[client]==2.47.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 40 && \
-              sleep 5 && pip install transformers==4.50.0 && \
+              pip install ray[client]==2.49.2  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 30 && \
+              sleep 5 && pip install transformers==4.57.0 && \
               REQUIRED_NODES=$((1 + 1)) \
               && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
               && while true; do \
@@ -62,15 +62,17 @@ spec:
                   fi; \
               done \
               && vllm serve \
-              /models/llms/olmOCR-7B-0225-preview \
+              /models/llms/DeepSeek-OCR \
                 --host 0.0.0.0 \
+                --hf-overrides '{"architectures": ["DeepseekOCRForCausalLM"]}' \
                 --port 8000 \
                 --swap_space 100 \
-                --served-model-name "olmOCR-7B-0225-preview" \
+                --served-model-name "ocr" \
                 --distributed-executor-backend "ray" \
+                --trust_remote_code \
                 --tensor-parallel-size 1 \
                 --pipeline_parallel-size 1 \
-                --gpu-memory-utilization 0.95 \
+                --gpu-memory-utilization 0.75 \
                 --max-num-seqs 64
           resources:
             requests:

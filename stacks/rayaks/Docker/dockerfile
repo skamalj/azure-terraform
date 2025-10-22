@@ -2,7 +2,7 @@ FROM rayproject/ray-llm:2.49.2-py311-cu128
 
 # Upgrade pip and install latest transformers
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --upgrade transformers=4.57.0 && \
-    pip install --no-cache-dir --upgrade vllm-0.11.0
+    pip install --no-cache-dir --upgrade transformers==4.57.0 && \
+    pip install --no-cache-dir --upgrade vllm
 
 

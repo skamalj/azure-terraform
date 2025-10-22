@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deepseek-ocr-fastapi
+  labels:
+    app: deepseek-ocr-fastapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deepseek-ocr-fastapi
+  template:
+    metadata:
+      labels:
+        app: deepseek-ocr-fastapi
+    spec:
+      # ---------------------------------------------
+      # Schedule to GPU A100 nodepool
+      # ---------------------------------------------
+      nodeSelector:
+            karpenter.sh/nodepool: gpu-pool-a100
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+
+      # ---------------------------------------------
+      # Pod specification
+      # ---------------------------------------------
+      containers:
+        - name: deepseek-ocr
+          image: ghcr.io/skamalj/deepseek-ocr-fastapi:latest  # <-- change to your registry path
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+
+          # --------------------------
+          # Environment variables (for config.py)
+          # --------------------------
+          command: ["bash", "-c"]
+          args:
+            - |
+              uvicorn fastapi_deepseek_ocr:app --host 0.0.0.0 --port 8080
+          env:
+            - name: MODEL_MODE
+              value: "gundam"           # tiny, small, base, large, gundam
+            - name: MODEL_PATH
+              value: "/models/llms/DeepSeek-OCR"
+            - name: PROMPT
+              value: "<image>\n<|grounding|>Convert the document to markdown."
+
+          # --------------------------
+          # Health checks
+          # --------------------------
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 5
+
+          # --------------------------
+          # Resource requests/limits
+          # --------------------------
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+            limits:
+              nvidia.com/gpu: 1
+
+          # --------------------------
+          # Model volume (Azure Blob via PVC)
+          # --------------------------
+          volumeMounts:
+            - name: blob-models
+              mountPath: /models/llms
+              readOnly: true
+            - name: shm
+              mountPath: /dev/shm
+
+      # --------------------------
+      # Volumes
+      # --------------------------
+      volumes:
+        - name: blob-models
+          persistentVolumeClaim:
+            claimName: azure-blob-model-pvc   # Must exist in same namespace
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deepseek-ocr-fastapi
+  labels:
+    app: deepseek-ocr-fastapi
+spec:
+  selector:
+    app: deepseek-ocr-fastapi
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  type: LoadBalancer   # ClusterIP for internal use only

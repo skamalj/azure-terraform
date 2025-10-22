@@ -22,10 +22,10 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: vllm-head
-          image: vllm/vllm-openai:v0.8.2
+          image: vllm/vllm-openai:v0.11.0
           command: ["/bin/bash", "-c"]
           args:
-            - pip install ray[client]==2.47.1 && pip install ray[default]==2.47.1 && ray start --head --port=6379 --ray-client-server-port=10001 --block --num-cpus 0
+            - pip install ray[client]==2.49.2 && pip install ray[default]==2.49.2 && ray start --head --port=6379 --ray-client-server-port=10001 --block --num-cpus 0
           ports:
             - containerPort: 6379
             - containerPort: 10001
