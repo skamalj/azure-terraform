@@ -12,17 +12,17 @@ spec:
       args:
         llm_configs:
         - model_loading_config:
-            model_id: DeepSeek-OCR
-            model_source: "/models/DeepSeek-OCR/"
+            model_id: dots-ocr
+            model_source: "/models/dots-ocr/dots.ocr"
           engine_kwargs:
             gpu_memory_utilization: 0.95
             tensor_parallel_size: 1 
             swap_space: 75
             trust_remote_code: true
-            max_model_len: 32768
+            max_model_len: 16384
           deployment_config:
             num_replicas: 1
-            max_ongoing_requests: 32
+            max_ongoing_requests: 8
             ray_actor_options:
               num_cpus: 16
   rayClusterConfig:

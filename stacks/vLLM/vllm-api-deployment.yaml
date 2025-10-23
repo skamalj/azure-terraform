@@ -62,18 +62,19 @@ spec:
                   fi; \
               done \
               && vllm serve \
-              /models/llms/DeepSeek-OCR \
+              /models/llms/Qwen3-VL-30B-A3B-Instruct/Qwen3-VL-30B-A3B-Instruct \
                 --host 0.0.0.0 \
-                --hf-overrides '{"architectures": ["DeepseekOCRForCausalLM"]}' \
                 --port 8000 \
                 --swap_space 100 \
-                --served-model-name "ocr" \
+                --dtype half \
+                --served-model-name "qwen3vl" \
                 --distributed-executor-backend "ray" \
                 --trust_remote_code \
                 --tensor-parallel-size 1 \
                 --pipeline_parallel-size 1 \
-                --gpu-memory-utilization 0.75 \
-                --max-num-seqs 64
+                --max_model_len 32768
+                --gpu-memory-utilization 0.95 \
+                --max-num-seqs 8
           resources:
             requests:
               nvidia.com/gpu: 1
