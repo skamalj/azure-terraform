@@ -13,12 +13,8 @@ spec:
         app: vllm-api
     spec:
       nodeSelector:
-          workload: rayWorkerAndAPI
-      tolerations:
-        - key: "kubernetes.azure.com/scalesetpriority"
-          operator: "Equal"
-          value: "spot"
-          effect: "NoSchedule"
+          workload: rayWorker
+          gpu: "a100"
       containers:
         - name: vllm-api
           image: vllm/vllm-openai:v0.11.0

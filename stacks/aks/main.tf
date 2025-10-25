@@ -89,20 +89,20 @@ resource "azurerm_role_assignment" "allow_aks_access" {
 }
 
 
-module "nodepool_head" {
-  source = "../../modules/akspool"
-  pool_name              = "userpool01"
-  kubernetes_cluster_id  = module.aks.aks_cluster.id
-  #vm_size = "Standard_NC4as_T4_v3"
-  vm_size = "standard_d2d_v4"
-  node_count = 1
-  mode                   = "User"
-  node_labels            = {
-    workload = "rayHead"
-  }
-  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
-  priority = "Spot"
-}
+#module "nodepool_head" {
+#  source = "../../modules/akspool"
+#  pool_name              = "userpool01"
+#  kubernetes_cluster_id  = module.aks.aks_cluster.id
+#  #vm_size = "Standard_NC4as_T4_v3"
+#  vm_size = "standard_d2d_v4"
+#  node_count = 1
+#  mode                   = "User"
+#  node_labels            = {
+#    workload = "rayHead"
+#  }
+#  vnet_subnet_id         = module.vnet.subnets["private-subnet"].id
+#  priority = "Spot"
+#}
 
 variable "enable_nodepool_api" {
   type    = bool
@@ -186,4 +186,10 @@ resource "azurerm_role_assignment" "storage_contributor" {
   scope              = data.azurerm_storage_account.target.id
   role_definition_id = data.azurerm_role_definition.contributor.id
   principal_id       = module.aks.aks_cluster.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "aks_network_contributor" {
+  scope                = module.vnet.vnet.id
+  role_definition_name = "Network Contributor"
+  principal_id         = module.aks.aks_cluster.identity[0].principal_id
 }

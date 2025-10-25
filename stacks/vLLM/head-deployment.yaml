@@ -14,7 +14,6 @@ spec:
     spec:
       nodeSelector:
             workload: rayHead
-            kubernetes.azure.com/scalesetpriority: spot
       tolerations:
         - key: "kubernetes.azure.com/scalesetpriority"
           operator: "Equal"
