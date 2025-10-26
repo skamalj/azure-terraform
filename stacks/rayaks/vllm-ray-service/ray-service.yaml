@@ -12,21 +12,31 @@ spec:
       args:
         llm_configs:
         - model_loading_config:
-            model_id: dots-ocr
-            model_source: "/models/dots-ocr/dots.ocr"
+            model_id: "llama"
+            model_source: "/models/Meta-Llama-3-8B-Instruct"
           engine_kwargs:
-            gpu_memory_utilization: 0.95
+            gpu_memory_utilization: 0.85
             tensor_parallel_size: 1 
+            dtype: "float16"
             swap_space: 75
-            trust_remote_code: true
-            max_model_len: 16384
+            max_model_len: 8192
+            max_num_seqs: 32
           deployment_config:
-            num_replicas: 1
-            max_ongoing_requests: 8
+            max_ongoing_requests: 25
+            autoscaling_config:
+              min_replicas: 0
+              max_replicas: 3
+              target_ongoing_requests: 10
+              downscale_to_zero_delay_s: 300
+              downscale_delay_s : 300
+              look_back_period_s: 600
             ray_actor_options:
               num_cpus: 16
   rayClusterConfig:
-    rayVersion: "2.50.0"
+    rayVersion: "2.50.1"
+    enableInTreeAutoscaling: true
+    autoscalerOptions:
+      version: v2
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
@@ -42,7 +52,7 @@ spec:
               claimName: azure-blob-model-pvc
           containers:
           - name: ray-head
-            image:  rayproject/ray-llm:2.50.0-py311-cu128
+            image:  rayproject/ray-llm:2.50.1-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -53,10 +63,6 @@ spec:
                 value: http://prometheus-grafana.prometheus-system.svc:80
               - name: RAY_PROMETHEUS_HOST
                 value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
-              - name: VLLM_LOGGING_LEVEL
-                value: DEBUG
-              - name: VLLM_WORKER_MULTIPROC_METHOD
-                value: spawn
             ports:
             - containerPort: 8000
               name: serve
@@ -75,12 +81,12 @@ spec:
               protocol: TCP
             resources:
               limits:
-                cpu: 3
+                cpu: 2
               requests:
-                cpu: 3
+                cpu: 2
     workerGroupSpecs:
-    - replicas: 1
-      minReplicas: 1
+    - replicas: 0
+      minReplicas: 0
       maxReplicas: 3
       groupName: gpu-group
       rayStartParams:
@@ -89,7 +95,7 @@ spec:
       template:
         spec:
           nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-a100
+            karpenter.sh/nodepool: gpu-pool-a10
           tolerations:
             - key: "nvidia.com/gpu"
               operator: "Equal"
@@ -105,7 +111,7 @@ spec:
               sizeLimit: 100Gi
           containers:
           - name: ray-worker
-            image:  rayproject/ray-llm:2.50.0-py311-cu128
+            image:  rayproject/ray-llm:2.50.1-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -113,11 +119,11 @@ spec:
               mountPath: /dev/shm
             resources:
               limits:
-                cpu: 16
+                cpu: 20
                 memory: 150Gi
                 nvidia.com/gpu: "1"
               requests:
-                cpu: 16
+                cpu: 20
                 memory: 150Gi
                 nvidia.com/gpu: "1"
     
