@@ -43,8 +43,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
     dns_zone_ids = []
   }
 
-  monitor_metrics {
-    
+  #  dynamic block — only included if enable_monitor_metrics is true
+  dynamic "monitor_metrics" {
+    for_each = var.enable_monitor_metrics ? [1] : []
+    content {}
   }
 
   network_profile {

@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm-workers-monitor
+  namespace: prometheus-system
+  labels:
+    release: prometheus   # must match Prometheus release label
+spec:
+  jobLabel: vllm-workers
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      ray.io/node-type: worker   # target the Ray worker pods
+  podMetricsEndpoints:
+    - port: vllm-metrics         # <- name of containerPort in your RayService
+      path: /metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_ray_io_cluster]
+          targetLabel: ray_io_cluster

@@ -134,3 +134,9 @@ variable "enable_diagnostics" {
   type        = bool
   default     = false
 }
+
+variable "enable_monitor_metrics" {
+  type    = bool
+  default = false
+  description = "Set to true to enable Azure Managed Prometheus monitoring (installs CRDs)"
+}
