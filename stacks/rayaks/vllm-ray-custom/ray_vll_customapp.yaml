@@ -1,0 +1,158 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: ray-serve-llm-custom
+spec:
+  serveConfigV2: |
+    applications:
+    - name: llms
+      import_path: vllm_ray_with_metrics:LLMServer
+      route_prefix: "/"
+      runtime_env:
+        working_dir: "/home/ray/serve_apps"
+      args:
+        model: "/models/Meta-Llama-3-8B-Instruct"
+        engine_args:
+          served_model_name: "llama"
+          model_source: "/models/Meta-Llama-3-8B-Instruct"
+          gpu_memory_utilization: 0.85
+          tensor_parallel_size: 1 
+          dtype: "float16"
+          max_model_len: 8192
+        deployments:
+            name: "LLMServer"
+            max_ongoing_requests: 25
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 3
+              target_ongoing_requests: 10
+              downscale_to_zero_delay_s: 300
+              downscale_delay_s : 300
+              look_back_period_s: 600
+            ray_actor_options:
+              num_cpus: 16
+  rayClusterConfig:
+    rayVersion: "2.50.1"
+    enableInTreeAutoscaling: true
+    autoscalerOptions:
+      version: v2
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+        num-gpus: "0"
+        metrics-export-port: "8080"
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: cpu-pool
+          volumes:
+          - name: tmp-volume
+            emptyDir: {}
+          - name: models-storage-volume
+            persistentVolumeClaim:
+              claimName: azure-blob-model-pvc
+          # --- ADDED ---
+          - name: custom-app-volume
+            configMap:
+              name: custom-vllm-app
+          containers:
+          - name: ray-head
+            image: rayproject/ray-llm:2.50.1-py311-cu128
+            volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp/prometheus
+            - name: models-storage-volume
+              mountPath: /models
+            # --- ADDED ---
+            - name: custom-app-volume
+              mountPath: /home/ray/serve_apps
+            env:
+            - name: RAY_GRAFANA_IFRAME_HOST
+              value: http://127.0.0.1:3000
+            - name: RAY_GRAFANA_HOST
+              value: http://prometheus-grafana.prometheus-system.svc:80
+            - name: RAY_PROMETHEUS_HOST
+              value: http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value:  "/tmp/prometheus"
+            ports:
+            - containerPort: 8000
+              name: serve
+              protocol: TCP
+            - containerPort: 8080
+              name: metrics
+              protocol: TCP
+            - containerPort: 6379
+              name: gcs
+              protocol: TCP
+            - containerPort: 8265
+              name: dashboard
+              protocol: TCP
+            - containerPort: 10001
+              name: client
+              protocol: TCP
+            resources:
+              limits:
+                cpu: 2
+              requests:
+                cpu: 2
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 3
+      groupName: gpu-group
+      rayStartParams:
+        num-gpus: "1"
+        num-cpus: "20"
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: gpu-pool-a10
+          tolerations:
+            - key: "nvidia.com/gpu"
+              operator: "Equal"
+              value: "true"
+              effect: "NoSchedule"
+          volumes:
+          - name: tmp-volume
+            emptyDir: {}
+          - name: models-storage-volume
+            persistentVolumeClaim:
+              claimName: azure-blob-model-pvc
+          - name: shm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 100Gi
+          # --- ADDED ---
+          - name: custom-app-volume
+            configMap:
+              name: custom-vllm-app
+          containers:
+          - name: ray-worker
+            image: rayproject/ray-llm:2.50.1-py311-cu128
+            env:
+            # --- REMOVED VLLM_PROMETHEUS envs ---
+            # Your custom app serves metrics on port 8000 via /metrics
+            - name: PROMETHEUS_MULTIPROC_DIR
+              value:  "/tmp/prometheus"
+            #ports:
+            # --- REMOVED vllm-metrics port ---
+            volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp/prometheus
+            - name: models-storage-volume
+              mountPath: /models
+            - name: shm
+              mountPath: /dev/shm
+            # --- ADDED ---
+            - name: custom-app-volume
+              mountPath: /home/ray/serve_apps
+            resources:
+              limits:
+                cpu: 20
+                memory: 150Gi
+                nvidia.com/gpu: "1"
+              requests:
+                cpu: 20
+                memory: 150Gi
+                nvidia.com/gpu: "1"

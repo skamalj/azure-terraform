@@ -23,7 +23,7 @@ spec:
         kind: AKSNodeClass
         name: cpu-class
   limits:
-    cpu: 8
+    cpu: 80
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m

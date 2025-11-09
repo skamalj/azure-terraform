@@ -1,0 +1,191 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: simple-app
+  namespace: default
+spec:
+  serviceUnhealthySecondThreshold: 300
+  deploymentUnhealthySecondThreshold: 300
+  
+  serveConfigV2: |
+    applications:
+    - name: simple-app
+      import_path: simple_app:build_app
+      route_prefix: /
+      runtime_env:
+        pip:
+          - ray>=2.50.0
+          - fastapi
+      deployments:
+      - name: "SimpleAPI"
+        max_ongoing_requests: 15
+        autoscaling_config:
+          min_replicas: 0
+          initial_replicas: 0
+          max_replicas: 10
+          target_ongoing_requests: 2
+          upscale_delay_s: 15
+          downscale_delay_s: 120
+          metrics_interval_s: 5
+          look_back_period_s: 10
+        ray_actor_options:
+          num_cpus: 1
+      
+  
+  rayClusterConfig:
+    rayVersion: "2.50.1"
+    enableInTreeAutoscaling: true
+    
+    # ========== HEAD NODE ==========
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+        num-gpus: "0"
+        dashboard-host: "0.0.0.0"
+      
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.50.1-py311
+            imagePullPolicy: IfNotPresent
+            env: 
+            - name: PYTHONPATH
+              value: /home/ray/serve_apps
+            
+            ports:
+            - containerPort: 8000
+              name: serve
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            
+            volumeMounts:
+            - name: serve-app
+              mountPath: /home/ray/serve_apps
+            
+            resources:
+              requests:
+                cpu: "1"
+                memory: "4Gi"
+              limits:
+                cpu: "2"
+                memory: "4Gi"
+          
+          volumes:
+          - name: serve-app
+            configMap:
+              name: simple-app-code
+    
+    # ========== WORKER NODES (Autoscale 0 to 2) ==========
+    workerGroupSpecs:
+    - groupName: default-worker
+      replicas: 0                   # ✅ Start with 0 replicas
+      minReplicas: 0                # ✅ Can scale down to 0
+      maxReplicas: 10               # ✅ Max 10 replicas
+      
+      rayStartParams:
+        num-cpus: "2"
+        num-gpus: "0"
+      
+      template:
+        spec:
+          nodeSelector:
+            karpenter.sh/nodepool: cpu-pool
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.50.1-py311
+            imagePullPolicy: IfNotPresent
+            env: 
+            - name: PYTHONPATH
+              value: /home/ray/serve_apps
+            
+            volumeMounts:
+            - name: serve-app
+              mountPath: /home/ray/serve_apps
+            
+            resources:
+              requests:
+                cpu: "2"
+                memory: "2Gi"
+              limits:
+                cpu: "2"
+                memory: "2Gi"
+          
+          volumes:
+          - name: serve-app
+            configMap:
+              name: simple-app-code
+    
+    # ========== AUTOSCALING SETTINGS ==========
+    autoscalerOptions:
+      idleTimeoutSeconds: 60       # Scale down to 0 after 60 seconds idle
+      upscalingMode: Aggressive     # Quickly scale up
+
+---
+# ========== CONFIGMAP WITH CODE ==========
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-app-code
+  namespace: default
+data:
+  simple_app.py: |
+    """
+    Simple Ray Serve App - Minimal Example
+    Just returns a response to test autoscaling
+    """
+    
+    import time
+    import logging
+    from fastapi import FastAPI
+    from ray import serve
+    from ray.serve import Application
+    from typing import Dict 
+    import os
+    os.environ["SERVE_HTTP_HOST"] = "0.0.0.0"
+    
+    logger = logging.getLogger("ray.serve")
+    
+    app = FastAPI()
+    
+    
+    @serve.deployment(
+        ray_actor_options={"num_cpus": 1},
+        autoscaling_config={
+            "min_replicas": 0,
+            "initial_replicas": 1,
+             "max_replicas": 5,
+             "target_ongoing_requests": 2,
+             "upscale_delay_s": 15,           # Reduce from default 30
+             "downscale_delay_s": 120,
+             "metrics_interval_s": 5,        # Reduce from default 10
+             "look_back_period_s": 10, 
+        },
+        max_ongoing_requests=15,
+    )
+    @serve.ingress(app)
+    class SimpleAPI:
+        """Simple API endpoint - no ML, just response."""
+        
+        @app.get("/health")
+        async def health(self):
+            """Health check."""
+            return {"status": "healthy"}
+        
+        @app.get("/test")
+        async def test(self):
+            """Test endpoint."""
+            return {"message": "Hello from Ray Serve!"}
+        
+        @app.post("/slow")
+        async def slow_request(self):
+            """Simulate slow request to trigger autoscaling."""
+            time.sleep(2)
+            return {"result": "Done after 2 seconds"}
+
+    def build_app(args: Dict[str, str]) -> Application:
+      return SimpleAPI.bind()  
