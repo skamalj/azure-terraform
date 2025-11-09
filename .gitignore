@@ -1,4 +1,5 @@
 *.tfstate
+litecone.*
 *.tfstate.*
 *.tfvars
 .terraform/

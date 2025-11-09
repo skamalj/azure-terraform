@@ -12,15 +12,21 @@ spec:
       args:
         llm_configs:
         - model_loading_config:
-            model_id: "llama"
-            model_source: "/models/Meta-Llama-3-8B-Instruct"
+            model_id: "qwen3"
+            model_source: "/models/Qwen3-30B-A3B-Thinking-2507"
           engine_kwargs:
-            gpu_memory_utilization: 0.85
+            gpu_memory_utilization: 0.95
             tensor_parallel_size: 1 
-            dtype: "float16"
+            dtype: "half"
             swap_space: 75
-            max_model_len: 8192
-            max_num_seqs: 32
+            max_model_len: 32768
+            max_num_seqs: 4
+            disable_log_stats: false
+            trust_remote_code: true
+          log_engine_metrics: true
+          runtime_env:
+            env_vars:
+              VLLM_USE_V1: "1"
           deployment_config:
             max_ongoing_requests: 25
             autoscaling_config:
@@ -33,13 +39,13 @@ spec:
             ray_actor_options:
               num_cpus: 16
   rayClusterConfig:
-    rayVersion: "2.50.1"
+    rayVersion: "2.51.1"
     enableInTreeAutoscaling: true
     autoscalerOptions:
       version: v2
     headGroupSpec:
       rayStartParams:
-        num-cpus: "0"
+        num-cpus: "2"
         num-gpus: "0"
         metrics-export-port: "8080"
       template:
@@ -52,7 +58,7 @@ spec:
               claimName: azure-blob-model-pvc
           containers:
           - name: ray-head
-            image:  rayproject/ray-llm:2.50.1-py311-cu128
+            image:  rayproject/ray-llm:2.51.1-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -81,9 +87,9 @@ spec:
               protocol: TCP
             resources:
               limits:
-                cpu: 2
+                cpu: 4
               requests:
-                cpu: 2
+                cpu: 4
     workerGroupSpecs:
     - replicas: 0
       minReplicas: 0
@@ -95,7 +101,7 @@ spec:
       template:
         spec:
           nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-a10
+            karpenter.sh/nodepool: gpu-pool-a100
           tolerations:
             - key: "nvidia.com/gpu"
               operator: "Equal"
@@ -111,7 +117,7 @@ spec:
               sizeLimit: 100Gi
           containers:
           - name: ray-worker
-            image:  rayproject/ray-llm:2.50.1-py311-cu128
+            image:  rayproject/ray-llm:2.51.1-py311-cu128
             env:
               - name: VLLM_PROMETHEUS_ENABLED
                 value: "true"

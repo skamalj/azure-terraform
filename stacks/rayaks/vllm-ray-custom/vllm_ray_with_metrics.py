@@ -1,19 +1,24 @@
 """
-Ray Serve + vLLM OpenAI-Compatible App
-IMPROVED VERSION with Eager Initialization + Resilient Config
-For vLLM 0.6+ (2024-2025)
+Ray Serve + vLLM OpenAI-Compatible App with Metrics
+Updated for vLLM 0.6+ (2024-2025)
+Exposes VLLM metrics via RayPrometheusStatLogger to Ray's internal metrics (port 8080)
+
+Simplified configuration:
+- bind() takes single dictionary argument
+- request_logger and chat_template initialized internally
 """
 
-import os
-import asyncio
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Union
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse, Response
+import os
 
 from ray import serve
+from ray.serve import Application
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.engine.async_llm_engine import AsyncLLMEngine
+from vllm.engine.metrics import RayPrometheusStatLogger
 from vllm.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -25,221 +30,238 @@ from vllm.entrypoints.openai.serving_models import (
     BaseModelPath,
 )
 
-from prometheus_client import generate_latest, REGISTRY
+# ✅ Set HTTP host to 0.0.0.0
+os.environ["SERVE_HTTP_HOST"] = "0.0.0.0"
 
 logger = logging.getLogger("ray.serve")
 
 app = FastAPI()
 
 
-# ========== HELPER: Run async in sync __init__ ==========
-def run_async_in_thread(coro):
-    """Run async code from sync context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+def get_served_model_names(engine_args: AsyncEngineArgs) -> List[str]:
+    """Extract served model names from engine args."""
+    if engine_args.served_model_name is not None:
+        served_model_names: Union[str, List[str]] = engine_args.served_model_name
+        if isinstance(served_model_names, str):
+            served_model_names: List[str] = [served_model_names]
+    else:
+        served_model_names: List[str] = [engine_args.model]
+    return served_model_names
 
 
 @serve.deployment(
+    ray_actor_options={"num_cpus": 1},
     autoscaling_config={
-        "min_replicas": 1,
-        "max_replicas": 2,
-        "target_ongoing_requests": 5,
+        "min_replicas": 0,
+        "initial_replicas": 0,
+        "max_replicas": 5,
+        "target_ongoing_requests": 2,
+        "upscale_delay_s": 15,
+        "downscale_delay_s": 120,
+        "metrics_interval_s": 5,
+        "look_back_period_s": 10,
     },
-    max_ongoing_requests=10,
+    max_ongoing_requests=15,
 )
 @serve.ingress(app)
 class LLMServer:
-    """Ray Serve LLM with eager initialization and resilient config."""
+    """
+    Ray Serve LLM deployment using vLLM engine with metrics.
     
+    Autoscales from 0 to 5 replicas based on load.
+    Metrics exposed via Ray's internal endpoint (port 8080).
+    """
+
     def __init__(
         self,
-        model: str = "Qwen/Qwen2.5-0.5B-Instruct",
+        model: str,
         engine_kwargs: Optional[Dict] = None,
         response_role: str = "assistant",
     ):
-        """Initialize with EAGER initialization (no lazy loading)."""
+        """
+        Initialize the LLM server with metrics.
+
+        Args:
+            model: Model ID from HuggingFace or local path
+            engine_kwargs: vLLM engine configuration parameters
+            response_role: Response role for OpenAI API (default: "assistant")
+        """
         self.model = model
+        self.engine_kwargs = engine_kwargs or {}
         self.response_role = response_role
-        
-        print("\n" + "="*80)
-        print("INITIALIZING VLLM SERVER (EAGER MODE)")
-        print("="*80)
-        
-        # ========== RESILIENT DEFAULTS ==========
-        resilient_defaults = {
-            "dtype": "float16",                 # Explicit, safe
-            "enforce_eager": True,              # No CUDA graphs - stable!
-            "max_model_len": 2048,              # Conservative
-            "gpu_memory_utilization": 0.7,      # Safe (not aggressive)
-            "max_num_seqs": 128,                # Moderate concurrency
-            "max_num_batched_tokens": 4096,
-            "enable_prefix_caching": False,     # Disabled for stability
-            "chunked_prefill_enabled": False,   # Disabled for stability
-            "tensor_parallel_size": 1,
-            "pipeline_parallel_size": 1,
-            "disable_log_stats": False,
-            "quantization": None,
-            "load_format": "auto",
-            "seed": 0,
-        }
-        
-        if engine_kwargs:
-            resilient_defaults.update(engine_kwargs)
-        
-        self.engine_kwargs = resilient_defaults
-        
-        print(f"1️⃣  Creating vLLM engine...")
-        print(f"   Model: {model}")
-        print(f"   Config: enforce_eager={self.engine_kwargs['enforce_eager']}")
-        
-        # Create engine
+
+        logger.info(f"Initializing vLLM engine with model: {model}")
+        logger.info(f"Engine kwargs: {self.engine_kwargs}")
+
+        # ✅ Ensure disable_log_stats is False to enable metrics
+        self.engine_kwargs.setdefault("disable_log_stats", False)
+
+        # Create AsyncEngineArgs
         engine_args = AsyncEngineArgs(
             model=model,
             distributed_executor_backend="ray",
             **self.engine_kwargs
         )
-        
+
+        # Initialize the vLLM async engine
         self.engine = AsyncLLMEngine.from_engine_args(engine_args)
-        print(f"   ✓ Engine created")
-        
-        # ========== EAGER INITIALIZATION ==========
-        print(f"2️⃣  Eagerly initializing OpenAI serving...")
+        logger.info("✓ vLLM engine created")
+
+        # ✅ Add RayPrometheusStatLogger for metrics
+        served_model_names = get_served_model_names(engine_args)
         
         try:
-            self.openai_serving_chat = run_async_in_thread(
-                self._async_init_openai_serving()
+            metrics_logger = RayPrometheusStatLogger(
+                local_interval=0.5,
+                labels=dict(model_name=served_model_names),
+                max_model_len=engine_args.max_model_len
             )
-            print(f"   ✓ OpenAI serving initialized")
-            print(f"✅ SERVER READY!\n")
+            self.engine.add_logger("ray", metrics_logger)
+            logger.info("✓ RayPrometheusStatLogger added")
+            logger.info("  Metrics: curl http://localhost:8080/metrics | grep vllm")
         except Exception as e:
-            print(f"   ✗ ERROR: {str(e)}")
-            print(f"   Using fallback lazy initialization\n")
-            self.openai_serving_chat = None
-    
-    async def _async_init_openai_serving(self):
-        """Async initialization of OpenAI serving."""
-        model_config = await self.engine.get_model_config()
-        
-        base_model_paths = [
-            BaseModelPath(name=self.model, model_path=self.model)
-        ]
-        
-        models = OpenAIServingModels(
-            engine_client=self.engine,
-            model_config=model_config,
-            base_model_paths=base_model_paths,
-        )
-        
-        openai_serving_chat = OpenAIServingChat(
-            engine_client=self.engine,
-            model_config=model_config,
-            models=models,
-            response_role=self.response_role,
-            request_logger=None,
-            chat_template=None,
-            chat_template_content_format="auto",
-        )
-        
-        return openai_serving_chat
-    
-    async def _ensure_initialized(self):
-        """Ensure engine is initialized (lazy fallback if eager failed)."""
+            logger.warning(f"Failed to add metrics logger: {str(e)}")
+
+        # Will be initialized on first request (lazy init)
+        self.openai_serving_chat = None
+
+    async def _init_openai_serving(self):
+        """Lazy initialization of OpenAI serving chat."""
         if self.openai_serving_chat is None:
-            self.openai_serving_chat = await self._async_init_openai_serving()
-    
+            logger.info("Initializing OpenAI serving chat...")
+
+            model_config = await self.engine.get_model_config()
+
+            # ✅ Auto-fetch chat template from model config
+            chat_template = None
+            try:
+                if hasattr(model_config, 'hf_config') and hasattr(model_config.hf_config, 'chat_template'):
+                    chat_template = model_config.hf_config.chat_template
+                    logger.info(f"✓ Chat template loaded from model config")
+            except Exception as e:
+                logger.info(f"No chat template in model config: {str(e)}")
+
+            served_model_names = [self.model]
+            base_model_paths = [
+                BaseModelPath(name=self.model, model_path=self.model)
+            ]
+            models = OpenAIServingModels(
+                engine_client=self.engine,
+                model_config=model_config,
+                base_model_paths=base_model_paths,
+            )
+
+            self.openai_serving_chat = OpenAIServingChat(
+                engine_client=self.engine,
+                model_config=model_config,
+                models=models,
+                response_role=self.response_role,
+                request_logger=None,  # ✅ No external logger needed
+                chat_template=chat_template,  # ✅ Auto-loaded from model
+                chat_template_content_format="auto",
+            )
+            logger.info("✓ OpenAI serving chat initialized successfully")
+
     @app.get("/health")
     async def health(self):
-        """Health check."""
-        return {
-            "status": "healthy",
-            "model": self.model,
-            "initialized": self.openai_serving_chat is not None,
-        }
-    
-    @app.get("/metrics")
-    async def metrics(self):
-        """Prometheus metrics."""
-        try:
-            metrics_output = generate_latest(REGISTRY)
-            return Response(content=metrics_output, media_type="text/plain")
-        except Exception as e:
-            logger.error(f"Error generating metrics: {str(e)}")
-            return Response(content=f"Error: {str(e)}", status_code=500)
-    
+        """Health check endpoint."""
+        return {"status": "healthy", "model": self.model}
+
     @app.get("/v1/models")
     async def list_models(self):
-        """List models."""
+        """List available models."""
         return {
             "object": "list",
-            "data": [{"id": self.model, "object": "model", "owned_by": "vllm"}]
+            "data": [{
+                "id": self.model,
+                "object": "model",
+                "owned_by": "vllm",
+            }]
         }
-    
+
     @app.post("/v1/chat/completions")
     async def create_chat_completion(
         self,
         request: ChatCompletionRequest,
         raw_request: Request,
     ):
-        """OpenAI-compatible chat completions."""
+        """
+        OpenAI-compatible chat completions endpoint.
+        Handles both streaming and non-streaming requests.
+        """
         try:
-            await self._ensure_initialized()
-            
+            await self._init_openai_serving()
+
+            logger.info(f"Chat completion request - Model: {request.model}")
+
+            # Generate response using vLLM
             generator = await self.openai_serving_chat.create_chat_completion(
                 request, raw_request
             )
-            
+
+            # Handle errors
             if isinstance(generator, ErrorResponse):
+                logger.error(f"Error response: {generator}")
                 return JSONResponse(
                     content=generator.model_dump(),
                     status_code=generator.code
                 )
-            
+
+            # Return streaming or non-streaming response
             if request.stream:
                 return StreamingResponse(
                     content=generator,
                     media_type="text/event-stream"
                 )
             else:
+                assert isinstance(generator, ChatCompletionResponse)
                 return JSONResponse(content=generator.model_dump())
-        
+
         except Exception as e:
-            logger.error(f"Error: {str(e)}", exc_info=True)
+            logger.error(f"Error in chat completion: {str(e)}", exc_info=True)
             return JSONResponse(
                 content={"error": str(e)},
                 status_code=500
             )
 
 
-def build_openai_app(
-    model: str = "Qwen/Qwen2.5-0.5B-Instruct",
-    engine_kwargs: Optional[Dict] = None,
-) -> serve.Application:
-    """Build OpenAI-compatible LLM serving application."""
-    print("\n" + "="*80)
-    print("BUILDING OPENAI-COMPATIBLE VLLM RAY SERVE APPLICATION")
-    print("="*80)
-    return LLMServer.bind(
-        model=model,
-        engine_kwargs=engine_kwargs,
-    )
+def build_app(args: Dict[str, str]) -> Application:
+    """
+    Build OpenAI-compatible LLM serving application with metrics.
 
+    Args:
+        args: Single dictionary with all configuration:
+            - model: Model ID or path
+            - engine_kwargs: Dict of vLLM engine parameters
+            - response_role: Response role (default: "assistant")
 
-#if __name__ == "__main__":
-#    os.environ.setdefault("PROMETHEUS_MULTIPROC_DIR", "/tmp/prometheus")
-#    
-#    app = build_openai_app(
-#        model="Qwen/Qwen2.5-0.5B-Instruct",
-#        engine_kwargs={
-#            "dtype": "float16",
-#            "enforce_eager": True,           # ✅ Stable
-#            "max_model_len": 2048,
-#            "gpu_memory_utilization": 0.7,   # ✅ Conservative
-#            "max_num_seqs": 128,
-#            "enable_prefix_caching": False,  # ✅ Stable
-#        }
-#    )
-#    
-#    serve.run(app, blocking=True, host="0.0.0.0", port=8000)
+    Returns:
+        Ray Serve application
+
+    Example serveConfigV2:
+        deployments:
+        - name: "LLMServer"
+          user_config:
+            model: "Qwen/Qwen2.5-0.5B-Instruct"
+            engine_kwargs:
+              tensor_parallel_size: 1
+              dtype: "float16"
+              max_model_len: 2048
+              gpu_memory_utilization: 0.7
+            response_role: "assistant"
+    """
+    # ✅ Single dictionary argument (extracted from args)
+    config = {
+        "model": args.get("model", "Qwen/Qwen2.5-0.5B-Instruct"),
+        "engine_kwargs": args.get("engine_kwargs", {
+            "tensor_parallel_size": 1,
+            "dtype": "float16",
+            "max_model_len": 2048,
+            "gpu_memory_utilization": 0.7,
+            "disable_log_stats": False,
+        }),
+        "response_role": args.get("response_role", "assistant"),
+    }
+
+    # ✅ bind() with single dictionary argument
+    return LLMServer.bind(**config)

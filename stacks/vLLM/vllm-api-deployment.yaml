@@ -43,7 +43,7 @@ spec:
             - containerPort: 9090
           args:
             - |
-              pip install ray[client]==2.49.2  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 30 && \
+              pip install ray[client]==2.51.1  && ray start --address=vllm-head.default.svc.cluster.local:6379 --num-cpus 30 && \
               sleep 5 && pip install transformers==4.57.0 && \
               REQUIRED_NODES=$((1 + 1)) \
               && echo "Waiting for $REQUIRED_NODES Ray nodes in cluster..." \
