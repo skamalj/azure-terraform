@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hf-model-downloader
+  labels:
+    app: hf-downloader
+spec:
+  restartPolicy: Always
+  containers:
+    - name: downloader
+      image: ubuntu:22.04
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token-secret
+              key: token
+              optional: true
+        - name: HF_TOKEN_PLAIN
+          value: "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+        - name: MODEL_NAME
+          value: "cpatonn/Qwen3-30B-A3B-Thinking-2507-AWQ-4bit"
+        - name: HF_HUB_ENABLE_HF_TRANSFER
+          value: "1"
+      volumeMounts:
+        - name: model-blob
+          mountPath: /models
+      command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          
+          # Use secret token if available, otherwise fallback to plain
+          FINAL_TOKEN="${HF_TOKEN:-$HF_TOKEN_PLAIN}"
+          
+          echo "=========================================="
+          echo "HuggingFace Model Downloader"
+          echo "=========================================="
+          echo "Model: $MODEL_NAME"
+          echo "Target: /models/$MODEL_NAME"
+          echo "Time: $(date)"
+          echo ""
+
+          apt-get update && apt-get install -y curl git-lfs ca-certificates unzip python3 python3-pip python3-venv
+          
+          # Install faster download library
+          curl -LsSf https://hf.co/cli/install.sh | bash
+
+
+          # Verify CLI is available
+          env PATH="/root/.local/bin:$PATH" hf version
+          
+          echo ""
+          echo "[INFO] Starting download..."
+          echo ""
+          
+          # Download with progress
+          env PATH="/root/.local/bin:$PATH" hf download \
+            "$MODEL_NAME" \
+            --token "$FINAL_TOKEN" \
+            --local-dir "/models/$MODEL_NAME"
+
+
+          echo ""
+          echo "=========================================="
+          echo "[SUCCESS] Download completed!"
+          echo "=========================================="
+          echo ""
+          
+          # Show what was downloaded
+          echo "Downloaded files:"
+          du -sh "/models/$MODEL_NAME"
+          echo ""
+          echo "File list:"
+          ls -lh "/models/$MODEL_NAME/" | head -30
+          
+          echo ""
+          echo "[INFO] Keeping pod alive for log inspection (1 hour)..."
+          sleep 3600
+          
+          echo "[INFO] Pod shutting down cleanly."
+      resources:
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+        limits:
+          cpu: "4"
+          memory: "16Gi"
+  volumes:
+    - name: model-blob
+      persistentVolumeClaim:
+        claimName: hf-model-download-pvc

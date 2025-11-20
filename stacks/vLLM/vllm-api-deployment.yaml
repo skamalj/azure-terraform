@@ -14,7 +14,7 @@ spec:
     spec:
       nodeSelector:
           workload: rayWorker
-          gpu: "a100"
+          gpu: "h100"
       containers:
         - name: vllm-api
           image: vllm/vllm-openai:v0.11.0
@@ -33,7 +33,7 @@ spec:
               command:
                 - /bin/bash
                 - -c
-                - '[ "$(ray status | grep node_ | wc -l)" -eq 2 ]'
+                - '[ "$(ray status | grep node_ | wc -l)" -ge 2 ]'
             initialDelaySeconds: 120
             periodSeconds: 10
             failureThreshold: 3
@@ -58,19 +58,19 @@ spec:
                   fi; \
               done \
               && vllm serve \
-              /models/llms/Qwen3-VL-30B-A3B-Instruct/Qwen3-VL-30B-A3B-Instruct \
+              /models/llms/cpatonn/Qwen3-30B-A3B-Thinking-2507-AWQ-4bit \
                 --host 0.0.0.0 \
                 --port 8000 \
-                --swap_space 100 \
-                --dtype half \
+                --swap_space 50 \
                 --served-model-name "qwen3vl" \
                 --distributed-executor-backend "ray" \
                 --trust_remote_code \
                 --tensor-parallel-size 1 \
                 --pipeline_parallel-size 1 \
-                --max_model_len 32768
-                --gpu-memory-utilization 0.95 \
-                --max-num-seqs 8
+                --max_model_len 32768 \
+                --enable-chunked-prefill \
+                --gpu-memory-utilization 0.98 \
+                --max-num-seqs 64
           resources:
             requests:
               nvidia.com/gpu: 1
@@ -97,7 +97,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 250Gi
+            sizeLimit: 100Gi
         - name: blob-models
           persistentVolumeClaim:
             claimName: azure-blob-model-pvc

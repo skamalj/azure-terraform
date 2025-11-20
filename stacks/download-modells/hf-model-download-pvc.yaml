@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-model-download-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: azureblob-csi-sea-rw
+  resources:
+    requests:
+      storage: 100Gi
