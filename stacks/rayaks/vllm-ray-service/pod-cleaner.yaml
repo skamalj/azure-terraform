@@ -1,0 +1,68 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terminator-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: terminator-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: terminator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: terminator-role
+subjects:
+  - kind: ServiceAccount
+    name: terminator-sa
+    namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: terminator-pod-cleaner
+  namespace: default
+spec:
+  serviceAccountName: terminator-sa
+  restartPolicy: Never
+  containers:
+  - name: cleaner
+    image: bitnami/kubectl:latest
+    command:
+    - /bin/bash
+    - -c
+    - |
+      echo "🔥 Starting Terminating-Pod Cleaner (runs every 30 seconds)..."
+      while true;
+      do
+        echo "⏳ Checking for pods stuck in Terminating..."
+
+        # List pods stuck in Terminating
+        kubectl get pods --all-namespaces | grep Terminating || echo "😎 No terminating pods found."
+
+        # Force delete pods stuck in Terminating
+        for pod in $(kubectl get pods --all-namespaces | grep Terminating | awk '{print $1","$2}');
+          do
+            ns=$(echo $pod | cut -d',' -f1)
+            name=$(echo $pod | cut -d',' -f2)
+
+            echo "🛠 Removing finalizers for $name ..."
+            kubectl patch pod $name -n $ns -p '{"metadata":{"finalizers":[]}}' --type=merge
+
+            echo "⚠️ Force deleting $name ..."
+            kubectl delete pod $name -n $ns --force --grace-period=0
+          done
+
+        echo "⏲ Sleeping 10 seconds..."
+        sleep 10
+      done

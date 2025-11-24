@@ -12,14 +12,15 @@ spec:
       args:
         llm_configs:
         - model_loading_config:
-            model_id: olmOCR-7B-0225-preview
-            model_source: /models/olmOCR-7B-0225-preview/
+            model_id: qwen3thinking
+            model_source: /models/cpatonn/Qwen3-30B-A3B-Thinking-2507-AWQ-4bit/
           engine_kwargs:
-            max_model_len: 8192
+            max_model_len: 32768
             device: auto
             gpu_memory_utilization: 0.9
-            tensor_parallel_size: 2 
+            tensor_parallel_size: 1 
             swap_space: 25
+            max-num-seqs: 64
           deployment_config:
             num_replicas: 1
             max_ongoing_requests: 32
@@ -27,7 +28,7 @@ spec:
             CPU: 16
             GPU: 1
   rayClusterConfig:
-    rayVersion: "2.46.0"
+    rayVersion: "2.51.1"
     headGroupSpec:
       rayStartParams:
         num-cpus: "0"
@@ -40,7 +41,7 @@ spec:
               claimName: s3-models-pvc
           containers:
           - name: ray-head
-            image: 010526271896.dkr.ecr.ap-south-1.amazonaws.com/rayproject/ray-llm:2.46.0-py311-cu124
+            image: rayproject/ray-llm:2.51.1-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -62,23 +63,23 @@ spec:
               protocol: TCP
             resources:
               limits:
-                cpu: 4
-                memory: 12000M
+                cpu: 3
+                memory: 6000M
               requests:
-                cpu: 4
-                memory: 12000M
+                cpu: 3
+                memory: 6000M
     workerGroupSpecs:
-    - replicas: 1
-      minReplicas: 1
+    - replicas: 0
+      minReplicas: 0
       maxReplicas: 3
       groupName: gpu-group
       rayStartParams:
-        num-gpus: "4"
-        num-cpus: "40"
+        num-gpus: "1"
+        num-cpus: "16"
       template:
         spec:
           nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-a10
+            karpenter.sh/nodepool: gpu-pool-h100
           tolerations:
             - key: "nvidia.com/gpu"
               operator: "Equal"
@@ -94,7 +95,7 @@ spec:
               sizeLimit: 100Gi
           containers:
           - name: ray-worker
-            image: 010526271896.dkr.ecr.ap-south-1.amazonaws.com/rayproject/ray-llm:2.46.0-py311-cu124
+            image: rayproject/ray-llm:2.51.1-py311-cu128
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -102,11 +103,11 @@ spec:
               mountPath: /dev/shm
             resources:
               limits:
-                cpu: 36
+                cpu: 20
                 memory: 150Gi
-                nvidia.com/gpu: "4"
+                nvidia.com/gpu: "1"
               requests:
-                cpu: 36
+                cpu: 20
                 memory: 150Gi
-                nvidia.com/gpu: "4"
+                nvidia.com/gpu: "1"
 

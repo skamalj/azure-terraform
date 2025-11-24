@@ -23,3 +23,4 @@ _auto.tfvars.json
 secrets.auto.tfvars
 secrets.auto.tfvars.json
 *.log
+output*

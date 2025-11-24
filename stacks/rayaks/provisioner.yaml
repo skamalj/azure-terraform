@@ -25,8 +25,8 @@ spec:
   limits:
     cpu: 80
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
 ---
 apiVersion: karpenter.azure.com/v1beta1
 kind: AKSNodeClass
@@ -66,8 +66,8 @@ spec:
   limits:
     cpu: 100
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -100,8 +100,8 @@ spec:
   limits:
     cpu: 100
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -131,8 +131,8 @@ spec:
   limits:
     cpu: 100
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -162,8 +162,8 @@ spec:
   limits:
     cpu: 100
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 1m
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
 ---
 apiVersion: karpenter.azure.com/v1beta1
 kind: AKSNodeClass

@@ -11,8 +11,10 @@ resource "null_resource" "post_aks_setup" {
       kubectl apply -f ${path.module}/vllm-ray-service/pvc.yaml
       kubectl apply -f ${path.module}/vllm-ray-service/nvidia-device-plugin-ds.yaml
       ~/dev/kuberay/install/prometheus/install.sh --auto-load-dashboard true
-      helm upgrade --install kuberay-operator kuberay/kuberay-operator --version 1.4.2  --set image.tag=v1.4.2 \
-      --set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.selector.release=prometheus
+      helm upgrade --install kuberay-operator kuberay/kuberay-operator --version 1.5.1  --set image.tag=v1.5.1 \
+      --set metrics.serviceMonitor.enabled=true --set metrics.serviceMonitor.selector.release=prometheus \
+      --set 'env[0].name=RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV' \
+      --set 'env[0].value="600"'
     EOT
   }
 
