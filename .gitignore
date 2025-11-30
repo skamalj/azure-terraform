@@ -24,3 +24,5 @@ secrets.auto.tfvars
 secrets.auto.tfvars.json
 *.log
 output*
+test/test.jpeg
+stacks/download-modells/hf-token-configmap.yaml

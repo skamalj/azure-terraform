@@ -1,186 +1,75 @@
-# Scaling and Benchmarking LLM Inference with vLLM and Ray on Azure Kubernetes Service
+# vLLM Bare-Metal Playbook
 
-This repository provides Kubernetes (Specific to Azure Kubernetes Service, due to storage CSI driver) manifests and scripts to deploy a **vLLM inference cluster** with GPU scheduling, persistent storage, and Prometheus-based monitoring.
+This folder contains a “manual gearbox” deployment of vLLM for teams that want full control over every pod. Instead of relying on the managed `RayService` pattern packaged under `stacks/rayaks`, you stand up the head, worker, and API interface yourself. It’s more hands-on, but the payoff is predictable rollouts, explicit resource pinning, and easier debugging when you need to inspect each component in isolation.
 
----
+## When to Choose This Layout
 
-## 📂 Files Overview
+- **Tight Operational Control:** You decide when to restart the head, how many workers run, and which GPU pool the API gateway lives on.
+- **Incremental Upgrades:** Roll different container versions for head/worker/API without waiting for RayService reconciler loops.
+- **Troubleshooting & Profiling:** Restart a single deployment, attach profiling containers, or override environment variables without touching the bigger Ray autoscaler stack.
 
-* **`head-deployment.yaml`**
-  Defines the **head node** deployment for vLLM, which coordinates workers and handles scheduling.
+If you prefer “click once and go,” the `stacks/rayaks/vllm-ray-service` directory gives you a higher-level RayService with automatic worker management, Prometheus integration, and pod recyclers. This directory is for the long-time operators who want to see—and control—every bolt.
 
-* **`worker-deployment.yaml`**
-  Deploys **worker nodes** that run vLLM inference tasks. These attach GPUs and execute model inference.
+## Components at a Glance
 
-* **`vllm-api-deployment.yaml`**
-  Exposes the **vLLM API service** for external access (e.g., REST or gRPC inference requests).
-  ⚠️ **Important:** Update this file to configure health/readiness checks that validate the correct number of **Ray workers** are running. This must align with your parallelism strategy (pipeline, tensor, or data parallel).
+| Manifest | Purpose | Highlights |
+|----------|---------|------------|
+| `storage-class-model-blob.yaml` | Storage plumbing | Thin storage class to back the shared PVC for model artifacts. |
+| `pvc.yaml` | Shared volume | Binds the PVC that both head and worker use to read models (often preloaded by the downloader stack). |
+| `nvidia-device-plugin-ds.yaml` | GPU enumeration | Ensures Kubernetes exposes GPU resources before you launch vLLM pods. Deploy once per cluster. |
+| `head-deployment.yaml` | Ray head node | Launches the head pod; exposes the dashboard & head service ports you’ll connect workers to. |
+| `worker-deployment.yaml` | Ray workers | Horizontal set of workers pointing back to the head; tweak replicas to control capacity. |
+| `vllm-api-deployment.yaml` | HTTP/OpenAI shim | Thin FastAPI wrapper that points to the Ray cluster for inference requests. |
+| `monitoring/` | Dashboards & rules | Optional extras for Prometheus/Grafana when you want eyes on GPU/latency metrics. |
 
-  * If you only need **one worker**, the API pod alone is sufficient.
-  * If you need **more than one worker**, deploy additional worker pods and ensure the API pod checks are updated accordingly.
+## Deploying Step by Step
 
-* **`nvidia-device-plugin-ds.yaml`**
-  Deploys the **NVIDIA Device Plugin DaemonSet**, allowing Kubernetes to schedule and expose GPU resources to pods.
+1. **Set up storage and GPUs**
+   ```bash
+   kubectl apply -f storage-class-model-blob.yaml
+   kubectl apply -f pvc.yaml
+   kubectl apply -f nvidia-device-plugin-ds.yaml
+   ```
+   Confirm the PVC binds and the device plugin reports GPUs before moving on.
 
-* **`storage-class-model-blob.yaml`**
-  Defines a **StorageClass** for model artifacts using blob storage (e.g., Azure Blob or equivalent CSI driver).
+2. **Bring up the Ray backbone**
+   ```bash
+   kubectl apply -f head-deployment.yaml
+   kubectl apply -f worker-deployment.yaml
+   ```
+   The worker deployment references the head service by name (`RAY_HEAD_SERVICE_HOST`). Adjust node selectors and resource requests in each manifest to match your cluster topology.
 
-* **`pvc.yaml`**
-  PersistentVolumeClaim (PVC) to mount the model storage into vLLM pods.
+3. **Expose the API facade**
+   ```bash
+   kubectl apply -f vllm-api-deployment.yaml
+   ```
+   This pod runs the vLLM HTTP server with the familiar OpenAI-compatible routes. Point clients at the service’s ClusterIP/Ingress once ready.
 
-* **`prom-deployment.yaml`**
-  Deploys **Prometheus** for monitoring cluster metrics and vLLM performance.
+4. **(Optional) Layer on monitoring**
+   The `monitoring/` directory contains Prometheus rules, dashboards, and pod monitors tailored to this manual setup. Apply them after your metrics stack is in place.
 
-* **`prometheus.sh`**
-  Helper script to create the Prometheus ConfigMap and apply it to the cluster.
-  Example scrape config included for monitoring the `vllm-api` service.
+## How It Differs from `stacks/rayaks`
 
----
+| Manual vLLM (this folder) | RayService (`stacks/rayaks`) |
+|---------------------------|------------------------------|
+| Separate deployments for head, worker, API | Declarative RayService object that manages the trio |
+| You scale workers via Kubernetes replicas | Autoscaler handled by the Ray operator |
+| Rollouts done pod-by-pod | Operator coordinates restarts and upgrades |
+| Great for bespoke debugging and custom GPU scheduling | Ideal for production clusters that want managed lifecycle and self-healing |
 
-## 🚀 Deployment Steps
+In many teams the RayService path becomes the default once everything stabilises. Keep this manual layout handy for day-zero bring-up, controlled benchmarks, or clusters where you are not ready to run the Ray operator.
 
-### 1. Install NVIDIA GPU Support
+## Configuration Pointers
 
-Ensure your Kubernetes cluster has GPU-enabled nodes and install the NVIDIA drivers + container runtime.
-Apply the device plugin:
+- **Model paths:** Each manifest mounts the shared PVC at `/models`. Pair this directory with the downloader workflow under `stacks/download-modells` so models are present before workers start.
+- **Environment variables:** The head and worker deployments define `RAY_` flags to tune runtime behaviour. Adjust memory, CPUs, and GPU counts based on your hardware.
+- **Networking:** The API deployment exposes port 8000 (OpenAI REST) and optionally gRPC. Wire it to an Ingress or LoadBalancer as needed.
 
-```bash
-kubectl apply -f nvidia-device-plugin-ds.yaml
-```
+## Operational Checklist
 
-### 2. Prepare Model Storage
+- Use `kubectl logs` on the head to watch worker registration.
+- Scale the worker deployment up/down to match demand.
+- Restart only the API pod if you change model serving parameters or need a quick config reload.
+- Once comfortable, compare behaviour against the RayService setup to decide which path best fits your production environment.
 
-Before deploying vLLM, download your models from **Hugging Face** and upload them to your **Azure Blob Storage** container.
-
-For example:
-
-```bash
-# Download a model (example: LLaMA 7B)
-git lfs install
-git clone https://huggingface.co/meta-llama/Llama-2-7b-hf
-
-# Upload to Azure Blob Storage
-az storage blob upload-batch \
-  --account-name <your-storage-account> \
-  --destination <your-container-name> \
-  --source Llama-2-7b-hf
-```
-
-Update `storage-class-model-blob.yaml` to point to your Azure Blob CSI configuration.
-These models will be mounted into the vLLM pods through the **PVC (pvc.yaml)**.
-
-```yaml
-volumeMounts:
-  - mountPath: /models
-    name: model-storage
-```
-
-### 3. Deploy Storage
-
-Set up the storage class and PVC for model weights:
-
-```bash
-kubectl apply -f storage-class-model-blob.yaml
-kubectl apply -f pvc.yaml
-```
-
-### 4. Deploy vLLM Cluster
-
-Deploy the head, workers, and API service:
-
-```bash
-kubectl apply -f head-deployment.yaml
-kubectl apply -f worker-deployment.yaml
-kubectl apply -f vllm-api-deployment.yaml
-```
-
-# vLLM Benchmarking Results
-
-## Text Generation Models
-
-This section covers benchmarks for general-purpose text generation models like Llama-3, Mistral, and Qwen.
-
-### Benchmark Table: Text Models
-> These tests were with `ShareGPT_V3` dataset available on huggingface
-
-| Model Name | GPU | Pipeline Parallel | No. of seq | Max Model Len | dtype | Token Throughput (tokens/sec) | TTFT (sec) | Cache Util. % | Result | Remark |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| mistral-7b | T4 | 1 | | 4096 | Not Set | | | | Fail | `Bfloat16` not supported on T4 (compute capability 7.5); suggests using `half`. |
-| mistral-7b | T4 | 1 | | 4096 | half | | | | Fail | Model Load failure. |
-| mistral-7b | T4 | 2 | 32 | 4096 | half | 390 | 2 | | Success | |
-| Qwen2.5-7B-Instruct | T4 | 2 | | 4096 | Not Set | | | | Fail | |
-| Qwen2.5-7B-Instruct | T4 | 2 | 32 | 4096 | half | 325 | 2 | 12 | Success | |
-| Qwen2.5-7B-Instruct | T4 | 2 | 128 | 4096 | half | 320 | 2 | 12 | Success | |
-| Meta-Llama-3-8B-Instruct | T4 | 2 | 32 | 8192 | half | 320 | 2 | 25 | Success | |
-| Meta-Llama-3-8B-Instruct | T4 | 2 | 32 | 4096 | half | 300 | 3 | 15 | Success | |
-| Meta-Llama-3-8B-Instruct | A10 | 1 | 64 | 8192 | None | 700 | 1 | 60 | Success | |
-| Meta-Llama-3-8B-Instruct | A10 | 1 | 128 | 16384 | None | | | | Failed | `max_model_len` (16384) exceeds the model's supported maximum (8192). |
-| Meta-Llama-3-8B-Instruct | A10 | 1 | 128 | 8192 | None | 700 | 1 | 70 | Success | |
-| mistral-7b | A10 | 1 | 64 | 8192 | None | 700 | 0.5 | 50 | Success | |
-| Qwen2.5-7B-Instruct | A10 | 1 | 64 | 8192 | None | 600 | 1 | 30 | Success | |
-
-### Summary: Text Generation Models
-
-* **GPU Impact**: There is a significant performance difference between the GPUs. The **A10** offers more than double the throughput (**~700 tokens/sec**) of the **T4** (**~300-390 tokens/sec**) for similar models.
-* **T4 Configuration**: To run these ~8B parameter models, the T4 GPU requires specific settings:
-    * The data type must be set to `half` precision, as `bfloat16` is not supported.
-    * Pipeline Parallelism of 2 (`PP=2`) was necessary to successfully load and run the models.
-* **A10 Performance**: The A10 GPU is a robust choice, achieving up to **700 tokens/sec** for both `Meta-Llama-3-8B-Instruct` and `mistral-7b` on a single GPU (`PP=1`). It handles larger batches and an 8192 context length with high efficiency.
-* **Top Performers**: `Meta-Llama-3-8B` and `mistral-7b` were the most performant models in this test set, reaching the 700 tokens/sec mark on the A10 GPU.
-
-***
-
-## OCR Model (`olmOCR-7B-0225-preview`)
-
-This section covers benchmarks for the specialized `olmOCR` model designed for Optical Character Recognition tasks.
-> These tests were simply using 400 page PDF book utilizing olmOCR toolkit. 
-
-### Benchmark Table: OCR Model
-
-| Model Name | GPU | Pipeline Parallel | No. of seq | Max Model Len | dtype | Token Throughput (tokens/sec) | TTFT (sec) | Cache Util. % | Result | Remark |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| olmOCR-7B-0225-preview | A10 | 1 | None | None | None | | | | Failed | Not enough cache. Model requires a large context length (>=32K). |
-| olmOCR-7B-0225-preview | A10 | 2 | None | None | None | 376 | 10 | 50 | Success | 25 dense pages finished in 2m 20s. |
-| olmOCR-7B-0225-preview | A100 | 1 | 64 | None | None | 1000 | 3 | | Success | |
-| olmOCR-7B-0225-preview | A100 | 1 | 128 | None | None | 950 | 3 | 2 | Success | |
-| olmOCR-7B-0225-preview | H100 | 1 | 2048 | None | None | 4000 | 4 | 80 | Success | Tested with a 400-page PDF. |
-
-### Summary: OCR Model
-
-* **Exceptional Hardware Scaling**: The `olmOCR` model's performance scales dramatically with more powerful GPUs, making it ideal for high-throughput environments.
-    * **A10**: Requires 2 GPUs (`PP=2`) to run, achieving **376 tokens/sec**.
-    * **A100**: Provides a ~2.7x performance boost over the A10, reaching **~1000 tokens/sec** on a single card.
-    * **H100**: Delivers an outstanding **4000 tokens/sec**, a 4x increase over the A100, and is capable of handling extremely large documents and batch sizes.
-* **High Memory Requirements**: This model is memory-intensive, failing to run on a single A10 due to insufficient cache and requiring a large context window (at least 32K).
-* **Built for Heavy Workloads**: The tests confirm the model's suitability for demanding, real-world OCR tasks, as demonstrated by its ability to process a 400-page PDF on the H100.
-
----
-
-## 📊 Benchmark Cost Comparison
-
-### Text Inference (50 QnA requests/sec)
-
-* Workload = 50 requests/sec × 512 tokens ≈ **25,600 tokens/sec**.
-
-| GPU / VM Type              | Tokens/sec per GPU | GPUs Required | Spot \$/hr | Regular \$/hr |
-| -------------------------- | ------------------ | ------------- | ---------- | ------------- |
-| **T4 (NC4as\_T4\_v3)**     | 320                | 80            | \$17.07    | \$58.88       |
-| **A10 (NV18ads\_A10\_v5)** | 700                | 37            | \$13.04    | \$76.96       |
-
-**Summary:** A10 spot instances are more cost-efficient than T4 for text workloads, requiring fewer GPUs to hit 50 QPS.
-
----
-
-### OCR Inference (1,000,000 pages)
-
-* Assumption = 1 page = 1000 tokens → **1 billion tokens total**.
-
-| GPU / VM Type                | Tokens/sec per GPU | Total Time (hrs) | Spot Cost | Regular Cost |
-| ---------------------------- | ------------------ | ---------------- | --------- | ------------ |
-| **A10 (NV18ads\_A10\_v5)**   | 350                | \~793 hrs        | \$279     | \$1,650      |
-| **A100 (NC24ads\_A100\_v4)** | 1000               | \~278 hrs        | \$245     | \$1,325      |
-| **H100 (NC40ads\_H100\_v5)** | 4000               | \~69 hrs         | \$499     | \$626        |
-
-**Summary:** For OCR, **A100 spot instances give the best price-performance balance**. A10 is cheaper but very slow, while H100 is fastest and also cost-efficient compared to its runtime.
-
----
+Manual does not mean messy—it simply gives you the knobs. This folder documents every piece so you can spin up vLLM with confidence and graduate to the managed RayService when you’re ready.

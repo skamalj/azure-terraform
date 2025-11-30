@@ -1,0 +1,180 @@
+---
+# PrometheusRule for Ray vLLM Recording Rules
+# This supplements existing PrometheusRules - add to your monitoring namespace
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ray-vllm-recording-rules
+  namespace: prometheus-system   # Change to your prometheus namespace if different
+  labels:
+    app: prometheus
+    release: prometheus  # Adjust based on your Prometheus Operator release name
+spec:
+  groups:
+    - name: ray_vllm_recording_rules
+      interval: 30s
+      rules:
+        # ============================================
+        # Token Metrics - Request/Generation
+        # ============================================
+        - record: ray_vllm:request_prompt_tokens_sum
+          expr: ray_vllm_request_prompt_tokens_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:generation_tokens_total
+          expr: ray_vllm_generation_tokens_total
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:request_generation_tokens_bucket
+          expr: ray_vllm_request_generation_tokens_bucket
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:request_prompt_tokens_bucket
+          expr: ray_vllm_request_prompt_tokens_bucket
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Latency Metrics - Time Per Output Token
+        # ============================================
+        - record: ray_vllm:time_per_output_token_seconds_bucket
+          expr: ray_vllm_time_per_output_token_seconds_bucket
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:time_per_output_token_seconds_sum
+          expr: ray_vllm_time_per_output_token_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:time_per_output_token_seconds_count
+          expr: ray_vllm_time_per_output_token_seconds_count
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Latency Metrics - Time To First Token (TTFT)
+        # ============================================
+        - record: ray_vllm:time_to_first_token_seconds_sum
+          expr: ray_vllm_time_to_first_token_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:time_to_first_token_seconds_count
+          expr: ray_vllm_time_to_first_token_seconds_count
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:time_to_first_token_seconds_bucket
+          expr: ray_vllm_time_to_first_token_seconds_bucket
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Latency Metrics - E2E Request Latency
+        # ============================================
+        - record: ray_vllm:e2e_request_latency_seconds_sum
+          expr: ray_vllm_e2e_request_latency_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:e2e_request_latency_seconds_count
+          expr: ray_vllm_e2e_request_latency_seconds_count
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:e2e_request_latency_seconds_bucket
+          expr: ray_vllm_e2e_request_latency_seconds_bucket
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Cache Utilization Metrics
+        # ============================================
+        - record: ray_vllm:gpu_cache_usage_perc
+          expr: ray_vllm_gpu_cache_usage_perc
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:cpu_cache_usage_perc
+          expr: ray_vllm_cpu_cache_usage_perc
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Request State Metrics
+        # ============================================
+        - record: ray_vllm:num_requests_running
+          expr: ray_vllm_num_requests_running
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:num_requests_swapped
+          expr: ray_vllm_num_requests_swapped
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:num_requests_waiting
+          expr: ray_vllm_num_requests_waiting
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Request Success/Finish Metrics
+        # ============================================
+        - record: ray_vllm:request_success_total
+          expr: ray_vllm_request_success_total
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Request Timing Metrics
+        # ============================================
+        - record: ray_vllm:request_queue_time_seconds_sum
+          expr: ray_vllm_request_queue_time_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:request_decode_time_seconds_sum
+          expr: ray_vllm_request_decode_time_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:request_prefill_time_seconds_sum
+          expr: ray_vllm_request_prefill_time_seconds_sum
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:request_max_num_generation_tokens_sum
+          expr: ray_vllm_request_max_num_generation_tokens_sum
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Prefix Cache Metrics
+        # ============================================
+        - record: ray_vllm:gpu_prefix_cache_hits_total
+          expr: ray_vllm_gpu_prefix_cache_hits_total
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:gpu_prefix_cache_queries_total
+          expr: ray_vllm_gpu_prefix_cache_queries_total
+          labels:
+            recording_rule: "true"
+
+        # ============================================
+        # Token Tracking Gauge Metrics
+        # ============================================
+        - record: ray_vllm:prompt_tokens_total
+          expr: ray_vllm_prompt_tokens_total
+          labels:
+            recording_rule: "true"
+
+        - record: ray_vllm:generation_tokens_total
+          expr: ray_vllm_generation_tokens_total
+          labels:
+            recording_rule: "true"

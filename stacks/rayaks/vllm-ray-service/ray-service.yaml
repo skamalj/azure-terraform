@@ -14,10 +14,11 @@ spec:
       args:
         llm_configs:
         - model_loading_config:
-            model_id: "qwen25"
+            model_id: "qwen3-30b-a3b-thinking-2507-awq-4bit"
             model_source: "/models/Qwen3-30B-A3B-Thinking-2507-AWQ-4bit"
           engine_kwargs:
             gpu_memory_utilization: 0.95
+            enable_log_requests: true
             tensor_parallel_size: 1 
             dtype: "half"
             swap_space: 75
@@ -30,11 +31,12 @@ spec:
             max_ongoing_requests: 11
             autoscaling_config:
               min_replicas: 0
-              max_replicas: 8
+              initial_replicas: 0
+              max_replicas: 5
               target_ongoing_requests: 3
-              downscale_to_zero_delay_s: 900
-              downscale_delay_s : 600
-              look_back_period_s: 60
+              downscale_to_zero_delay_s: 180
+              downscale_delay_s: 60
+              look_back_period_s: 15
             ray_actor_options:
               num_cpus: 16
   rayClusterConfig:
@@ -42,15 +44,15 @@ spec:
     enableInTreeAutoscaling: true
     autoscalerOptions:
       version: v2
-      idleTimeoutSeconds: 600
       env:
         - name: RAY_AUTOSCALER_RECONCILE_ALLOCATE_STATUS_TIMEOUT_S
           value: "1200" 
     headGroupSpec:
       rayStartParams:
-        num-cpus: "2"
+        num-cpus: "0"
         num-gpus: "0"
         metrics-export-port: "8080"
+        dashboard-host: "0.0.0.0"
       template:
         spec:
           nodeSelector:
@@ -100,6 +102,7 @@ spec:
       minReplicas: 0
       maxReplicas: 1
       groupName: gpu-group
+      idleTimeoutSeconds: 1200
       rayStartParams:
         num-gpus: "1"
         num-cpus: "20"
@@ -135,25 +138,13 @@ spec:
               - name: VLLM_PROMETHEUS_ENABLED
                 value: "true"
               - name: VLLM_PROMETHEUS_PORT
-                value: "8001"
+                value: "8080"
               - name: RAY_AUTOSCALER_RECONCILE_ALLOCATE_STATUS_TIMEOUT_S
                 value: "1200"
             ports:
               - containerPort: 8001
                 name: vllm-metrics
                 protocol: TCP
-            # Startup probe - allows up to 15 minutes for initial startup
-            startupProbe:
-              exec:
-                command:
-                  - bash
-                  - -c
-                  - wget --tries 1 -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success
-              initialDelaySeconds: 60
-              periodSeconds: 30
-              timeoutSeconds: 10
-              failureThreshold: 30  # 60s + (30 × 30s) = 15.5 minutes total
-              successThreshold: 1
             volumeMounts:
             - name: models-storage-volume
               mountPath: /models
@@ -172,13 +163,14 @@ spec:
       minReplicas: 0
       maxReplicas: 5
       groupName: gpu-group-2
+      idleTimeoutSeconds: 120
       rayStartParams:
         num-gpus: "1"
         num-cpus: "20"
       template:
         spec:
           nodeSelector:
-            karpenter.sh/nodepool: gpu-pool-h100
+            karpenter.sh/nodepool: gpu-pool-a100
           tolerations:
             - key: "nvidia.com/gpu"
               operator: "Equal"
@@ -207,7 +199,7 @@ spec:
               - name: VLLM_PROMETHEUS_ENABLED
                 value: "true"
               - name: VLLM_PROMETHEUS_PORT
-                value: "8001"
+                value: "8080"
               - name: RAY_AUTOSCALER_RECONCILE_ALLOCATE_STATUS_TIMEOUT_S
                 value: "1200"
             ports:
@@ -219,18 +211,6 @@ spec:
               mountPath: /models
             - name: shm
               mountPath: /dev/shm
-            # Startup probe - allows up to 15 minutes for initial startup
-            startupProbe:
-              exec:
-                command:
-                  - bash
-                  - -c
-                  - wget --tries 1 -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success
-              initialDelaySeconds: 60
-              periodSeconds: 30
-              timeoutSeconds: 10
-              failureThreshold: 30  # 60s + (30 × 30s) = 15.5 minutes total
-              successThreshold: 1
             resources:
               limits:
                 cpu: 20
