@@ -1,0 +1,60 @@
+{{- if .Values.nvidiaDevicePlugin.enabled }}
+{{- if and .Values.nvidiaDevicePlugin.namespace (not (lookup "v1" "Namespace" "" .Values.nvidiaDevicePlugin.namespace)) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.nvidiaDevicePlugin.namespace }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-nvidia-device-plugin
+  {{- if .Values.nvidiaDevicePlugin.namespace }}
+  namespace: {{ .Values.nvidiaDevicePlugin.namespace }}
+  {{- end }}
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nvidia-device-plugin
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: nvidia-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-ray.labels" . | nindent 8 }}
+        app.kubernetes.io/component: nvidia-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      {{- if .Values.nvidiaDevicePlugin.affinity }}
+      affinity:
+        {{- toYaml .Values.nvidiaDevicePlugin.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nvidiaDevicePlugin.tolerations }}
+      tolerations:
+        {{- toYaml .Values.nvidiaDevicePlugin.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: nvidia-device-plugin
+          image: {{ .Values.nvidiaDevicePlugin.image.repository }}:{{ .Values.nvidiaDevicePlugin.image.tag }}
+          imagePullPolicy: {{ .Values.nvidiaDevicePlugin.image.pullPolicy }}
+          env:
+            - name: FAIL_ON_INIT_ERROR
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+{{- end }}

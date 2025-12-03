@@ -1,0 +1,44 @@
+{{- if and .Values.storageClass.create (not (lookup "storage.k8s.io/v1" "StorageClass" "" .Values.storageClass.name)) }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name }}
+provisioner: {{ .Values.storageClass.provisioner }}
+parameters:
+{{ toYaml .Values.storageClass.parameters | indent 2 }}
+{{- if .Values.storageClass.mountOptions }}
+mountOptions:
+{{ toYaml .Values.storageClass.mountOptions | indent 2 }}
+{{- end }}
+reclaimPolicy: {{ .Values.storageClass.reclaimPolicy }}
+volumeBindingMode: {{ .Values.storageClass.volumeBindingMode }}
+---
+{{- end }}
+{{- if and .Values.global.hfCache.createPvc (not (lookup "v1" "PersistentVolumeClaim" .Release.Namespace .Values.global.hfCache.pvcName)) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.global.hfCache.pvcName }}
+spec:
+  accessModes:
+    {{- toYaml .Values.global.hfCache.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.global.hfCache.size }}
+---
+{{- end }}
+{{- if and .Values.modelPvc.create (not (lookup "v1" "PersistentVolumeClaim" .Release.Namespace .Values.global.modelStorage.pvcName)) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.global.modelStorage.pvcName }}
+spec:
+  accessModes:
+    {{- toYaml .Values.modelPvc.accessModes | nindent 4 }}
+  {{- if .Values.modelPvc.storageClassName }}
+  storageClassName: {{ .Values.modelPvc.storageClassName }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.modelPvc.size }}
+{{- end }}

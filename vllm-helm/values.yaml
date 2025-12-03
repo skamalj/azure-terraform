@@ -1,0 +1,223 @@
+global:
+  nameOverride: ""
+  fullnameOverride: ""
+  imagePullSecrets: []
+  modelStorage:
+    pvcName: azure-blob-model-pvc
+  hfCache:
+    createPvc: true
+    pvcName: hf-cache-pvc
+    accessModes:
+      - ReadWriteOnce
+    size: 50Gi
+
+storageClass:
+  create: true
+  name: azureblob-csi-sea
+  provisioner: blob.csi.azure.com
+  parameters:
+    containerName: models
+    storageAccount: skamaljhuggingfacesea
+    resourceGroup: azadmin
+    protocol: fuse
+  mountOptions:
+    - --file-cache-timeout-in-seconds=120
+    - --use-attr-cache=true
+    - -o allow_other
+    - -o ro
+  reclaimPolicy: Retain
+  volumeBindingMode: Immediate
+
+modelPvc:
+  create: true
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: azureblob-csi-sea
+  size: 100Gi
+
+head:
+  enabled: true
+  replicas: 1
+  image:
+    repository: vllm/vllm-openai
+    tag: v0.11.0
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    karpenter.sh/nodepool: cpu-pool
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  ray:
+    clientVersion: 2.51.1
+    defaultVersion: 2.51.1
+    numCpus: 0
+    gcsPort: 6379
+    clientPort: 10001
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2500Mi
+    limits:
+      cpu: 500m
+      memory: 2500Mi
+  service:
+    type: ClusterIP
+
+worker:
+  enabled: true
+  image:
+    repository: vllm/vllm-openai
+    tag: v0.8.2
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    karpenter.sh/nodepool: gpu-pool-a100
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  ray:
+    clientVersion: 2.47.1
+    numCpus: 36
+  transformers:
+    version: ""
+  resources:
+    requests: {}
+    limits: {}
+  readinessProbe:
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - ray status 2>/dev/null | grep -i active || exit 1
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 5
+  livenessProbe:
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - ray status 2>/dev/null | grep -i active || exit 1
+    initialDelaySeconds: 180
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 5
+  volumeMounts:
+    - name: hf-cache
+      mountPath: /root/.cache/huggingface
+    - name: shm
+      mountPath: /dev/shm
+    - name: blob-models
+      mountPath: /models/llms
+      readOnly: true
+  volumes:
+    - name: hf-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 15Gi
+    - name: blob-models
+      persistentVolumeClaim:
+        claimName: azure-blob-model-pvc
+
+api:
+  enabled: true
+  dataParallelSize: 1
+  image:
+    repository: vllm/vllm-openai
+    tag: v0.11.0
+    pullPolicy: IfNotPresent
+  nodeSelector:
+    karpenter.sh/nodepool: gpu-pool-a100
+  tolerations: []
+  ray:
+    clientVersion: 2.51.1
+    numCpus: 30
+  transformersVersion: 4.57.0
+  model:
+    path: /models/llms/Qwen3-30B-A3B-Thinking-2507
+    servedName: qwen3vl
+  vllm:
+    host: 0.0.0.0
+    port: 8000
+    metricsPort: 9090
+    swapSpace: 100
+    dtype: auto
+    distributedExecutorBackend: ray
+    tensorParallelSize: 1
+    pipelineParallelSize: 1
+    trustRemoteCode: true
+    gpuMemoryUtilization: 0.98
+    cpuOffloadGb: 10
+    maxModelLen: 32768
+    maxNumSeqs: 2
+  resources:
+    requests: {}
+    limits: {}
+  volumeMounts:
+    - name: hf-cache
+      mountPath: /root/.cache/huggingface
+    - name: shm
+      mountPath: /dev/shm
+    - name: blob-models
+      mountPath: /models/llms
+      readOnly: true
+  volumes:
+    - name: hf-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 100Gi
+    - name: blob-models
+      persistentVolumeClaim:
+        claimName: azure-blob-model-pvc
+  service:
+    type: ClusterIP
+
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: latest
+    pullPolicy: IfNotPresent
+  scrapeTargets: []
+  nodeSelector:
+    karpenter.sh/nodepool: cpu-pool
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  resources: {}
+
+nvidiaDevicePlugin:
+  enabled: true
+  namespace: gpu-resources
+  image:
+    repository: nvcr.io/nvidia/k8s-device-plugin
+    tag: v0.18.0
+    pullPolicy: IfNotPresent
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: accelerator
+                operator: In
+                values:
+                  - nvidia
+  tolerations:
+    - key: sku
+      operator: Equal
+      value: gpu
+      effect: NoSchedule
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule

@@ -1,0 +1,72 @@
+{{- if .Values.head.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-head
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: head
+spec:
+  replicas: {{ .Values.head.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: head
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-ray.labels" . | nindent 8 }}
+        app.kubernetes.io/component: head
+    spec:
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.head.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.head.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.head.tolerations }}
+      tolerations:
+        {{- toYaml .Values.head.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: head
+          image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
+          imagePullPolicy: {{ .Values.head.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+{{ include "vllm-ray.headCommand" . | nindent 14 }}
+          ports:
+            - containerPort: {{ .Values.head.ray.gcsPort }}
+              name: ray-node
+            - containerPort: {{ .Values.head.ray.clientPort }}
+              name: ray-client
+          {{- if .Values.head.resources }}
+          resources:
+            {{- toYaml .Values.head.resources | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-head
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: head
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: head
+  type: {{ .Values.head.service.type }}
+  ports:
+    - name: ray-node
+      port: {{ .Values.head.ray.gcsPort }}
+      targetPort: {{ .Values.head.ray.gcsPort }}
+    - name: ray-client
+      port: {{ .Values.head.ray.clientPort }}
+      targetPort: {{ .Values.head.ray.clientPort }}
+{{- end }}

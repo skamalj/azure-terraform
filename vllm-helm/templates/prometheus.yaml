@@ -1,0 +1,89 @@
+{{- if .Values.prometheus.enabled }}
+{{- $defaultTarget := printf "%s-api:%d" (include "vllm-ray.fullname" .) (int .Values.api.vllm.port) }}
+{{- $targets := or .Values.prometheus.scrapeTargets (list $defaultTarget) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-prometheus-config
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  prometheus.yaml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 30s
+
+    scrape_configs:
+      - job_name: 'vllm'
+        static_configs:
+          - targets:
+{{- range $targets }}
+              - '{{ . }}'
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-prometheus
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-ray.labels" . | nindent 8 }}
+        app.kubernetes.io/component: prometheus
+    spec:
+      {{- if .Values.prometheus.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.prometheus.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.prometheus.tolerations }}
+      tolerations:
+        {{- toYaml .Values.prometheus.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: prometheus
+          image: {{ .Values.prometheus.image.repository }}:{{ .Values.prometheus.image.tag }}
+          imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yaml
+          ports:
+            - containerPort: 9090
+              name: web
+          {{- if .Values.prometheus.resources }}
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "vllm-ray.fullname" . }}-prometheus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-prometheus
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
+{{- end }}

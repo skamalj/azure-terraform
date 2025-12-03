@@ -1,0 +1,123 @@
+{{- if .Values.api.enabled }}
+{{- $pipelineSize := int (default 1 .Values.api.vllm.pipelineParallelSize) }}
+{{- $dataParallelSize := int (default 1 .Values.api.dataParallelSize) }}
+{{- $workerNodesNeeded := mul $pipelineSize $dataParallelSize }}
+{{- $requiredNodes := add $workerNodesNeeded 1 }}
+{{- $apiReplicasRaw := default $dataParallelSize .Values.api.replicas }}
+{{- $apiReplicas := int $apiReplicasRaw }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-api
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ $apiReplicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-ray.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.api.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml .Values.api.tolerations | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api
+          image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+{{ include "vllm-ray.apiCommand" . | nindent 14 }}
+          ports:
+            - containerPort: {{ .Values.api.vllm.port }}
+              name: http
+            - containerPort: {{ .Values.api.vllm.metricsPort }}
+              name: metrics
+          {{- if .Values.api.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.api.readinessProbe | nindent 12 }}
+          {{- else }}
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: {{ .Values.api.vllm.port }}
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 2
+          {{- end }}
+          {{- if .Values.api.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.api.livenessProbe | nindent 12 }}
+          {{- else }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - '[ "$(ray status | grep node_ | wc -l)" -ge {{ $requiredNodes }} ]'
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+          {{- end }}
+          {{- $gpuCount := int (default 1 .Values.api.vllm.tensorParallelSize) }}
+          {{- $resources := deepCopy (default dict .Values.api.resources) }}
+          {{- if not ($resources.requests) }}
+          {{- $_ := set $resources "requests" dict }}
+          {{- end }}
+          {{- if not ($resources.limits) }}
+          {{- $_ := set $resources "limits" dict }}
+          {{- end }}
+          {{- $_ := set $resources.requests "nvidia.com/gpu" $gpuCount }}
+          {{- $_ := set $resources.limits "nvidia.com/gpu" $gpuCount }}
+          resources:
+            {{- toYaml $resources | nindent 12 }}
+          {{- if .Values.api.volumeMounts }}
+          volumeMounts:
+            {{- toYaml .Values.api.volumeMounts | nindent 12 }}
+          {{- end }}
+      {{- if .Values.api.volumes }}
+      volumes:
+        {{- toYaml .Values.api.volumes | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vllm-ray.fullname" . }}-api
+  labels:
+    {{- include "vllm-ray.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+  type: {{ .Values.api.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.api.vllm.port }}
+      targetPort: {{ .Values.api.vllm.port }}
+    - name: metrics
+      port: {{ .Values.api.vllm.metricsPort }}
+      targetPort: {{ .Values.api.vllm.metricsPort }}
+{{- end }}
