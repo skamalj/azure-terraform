@@ -1,0 +1,56 @@
+# Example overrides for the vLLM chart. Supply this file with
+# `-f values.override.example.yaml` (and tailor values per environment).
+
+versions:
+  ray:
+    client: 2.51.1
+    default: 2.51.1
+  vllmOpenAI: v0.12.0
+  transformers: 4.57.0
+
+nodePools:
+  cpu:
+    selector:
+      karpenter.sh/nodepool: cpu-pool
+  gpu-a100:
+    selector:
+      karpenter.sh/nodepool: gpu-pool-a100
+
+sharedMemory:
+  worker:
+    sizeLimit: 30Gi
+  api:
+    sizeLimit: 120Gi
+
+head:
+  nodePool: cpu
+
+worker:
+  nodePool: gpu-a100
+  extraPipPackages: []
+  extraShellCommands: []
+    
+api:
+  nodePool: gpu-a100
+  extraPipPackages: []
+  extraShellCommands: []
+  model:
+    path: /models/llms/Qwen3-VL-30B-A3B-Instruct-FP8/Qwen3-VL-30B-A3B-Instruct-FP8
+    servedName: Qwen3-VL-30B-A3B-Instruct-FP8
+  vllm:
+    host: 0.0.0.0
+    port: 9000
+    metricsPort: 9100
+    swapSpace: 64
+    dtype: bfloat16
+    distributedExecutorBackend: ray
+    tensorParallelSize: 2
+    pipelineParallelSize: 1
+    trustRemoteCode: true
+    gpuMemoryUtilization: 0.98
+    cpuOffloadGb: 8
+    maxModelLen: 4096
+    maxNumSeqs: 4
+    maxSeqLenToCapture: 8192
+    enablePrefixCaching: true
+    maxLogprobs: 5

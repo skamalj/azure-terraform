@@ -22,9 +22,10 @@ spec:
       imagePullSecrets:
         {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
-      {{- if .Values.head.nodeSelector }}
+      {{- $nodeSelector := include "vllm-ray.nodeSelector" (dict "component" .Values.head "defaultPool" "cpu" "nodePools" .Values.nodePools) }}
+      {{- if $nodeSelector }}
       nodeSelector:
-        {{- toYaml .Values.head.nodeSelector | nindent 8 }}
+{{ $nodeSelector | indent 8 }}
       {{- end }}
       {{- if .Values.head.tolerations }}
       tolerations:
@@ -32,7 +33,7 @@ spec:
       {{- end }}
       containers:
         - name: head
-          image: {{ .Values.head.image.repository }}:{{ .Values.head.image.tag }}
+          image: {{ .Values.head.image.repository }}:{{ .Values.versions.vllmOpenAI }}
           imagePullPolicy: {{ .Values.head.image.pullPolicy }}
           command:
             - /bin/bash

@@ -160,7 +160,7 @@ spec:
         kind: AKSNodeClass
         name: gpu-class
   limits:
-    cpu: 100
+    cpu: 700
   disruption:
     consolidationPolicy: WhenEmpty
     consolidateAfter: 300s

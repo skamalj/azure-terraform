@@ -11,6 +11,27 @@ global:
       - ReadWriteOnce
     size: 50Gi
 
+nodePools:
+  cpu:
+    selector:
+      karpenter.sh/nodepool: cpu-pool
+  gpu:
+    selector:
+      karpenter.sh/nodepool: gpu-pool-a100
+
+sharedMemory:
+  worker:
+    sizeLimit: 15Gi
+  api:
+    sizeLimit: 100Gi
+
+versions:
+  ray:
+    client: 2.51.1
+    default: 2.51.1
+  vllmOpenAI: v0.11.0
+  transformers: 4.57.0
+
 storageClass:
   create: true
   name: azureblob-csi-sea
@@ -38,20 +59,17 @@ modelPvc:
 head:
   enabled: true
   replicas: 1
+  nodePool: cpu
+  nodeSelector: {}
   image:
     repository: vllm/vllm-openai
-    tag: v0.11.0
     pullPolicy: IfNotPresent
-  nodeSelector:
-    karpenter.sh/nodepool: cpu-pool
   tolerations:
     - key: kubernetes.azure.com/scalesetpriority
       operator: Equal
       value: spot
       effect: NoSchedule
   ray:
-    clientVersion: 2.51.1
-    defaultVersion: 2.51.1
     numCpus: 0
     gcsPort: 6379
     clientPort: 10001
@@ -67,22 +85,20 @@ head:
 
 worker:
   enabled: true
+  nodePool: gpu
+  nodeSelector: {}
+  extraPipPackages: []
+  extraShellCommands: []
   image:
     repository: vllm/vllm-openai
-    tag: v0.8.2
     pullPolicy: IfNotPresent
-  nodeSelector:
-    karpenter.sh/nodepool: gpu-pool-a100
   tolerations:
     - key: kubernetes.azure.com/scalesetpriority
       operator: Equal
       value: spot
       effect: NoSchedule
   ray:
-    clientVersion: 2.47.1
     numCpus: 36
-  transformers:
-    version: ""
   resources:
     requests: {}
     limits: {}
@@ -114,31 +130,20 @@ worker:
     - name: blob-models
       mountPath: /models/llms
       readOnly: true
-  volumes:
-    - name: hf-cache
-      emptyDir: {}
-    - name: shm
-      emptyDir:
-        medium: Memory
-        sizeLimit: 15Gi
-    - name: blob-models
-      persistentVolumeClaim:
-        claimName: azure-blob-model-pvc
 
 api:
   enabled: true
   dataParallelSize: 1
+  nodePool: gpu
+  nodeSelector: {}
+  extraPipPackages: []
+  extraShellCommands: []
   image:
     repository: vllm/vllm-openai
-    tag: v0.11.0
     pullPolicy: IfNotPresent
-  nodeSelector:
-    karpenter.sh/nodepool: gpu-pool-a100
   tolerations: []
   ray:
-    clientVersion: 2.51.1
     numCpus: 30
-  transformersVersion: 4.57.0
   model:
     path: /models/llms/Qwen3-30B-A3B-Thinking-2507
     servedName: qwen3vl
@@ -167,16 +172,6 @@ api:
     - name: blob-models
       mountPath: /models/llms
       readOnly: true
-  volumes:
-    - name: hf-cache
-      emptyDir: {}
-    - name: shm
-      emptyDir:
-        medium: Memory
-        sizeLimit: 100Gi
-    - name: blob-models
-      persistentVolumeClaim:
-        claimName: azure-blob-model-pvc
   service:
     type: ClusterIP
 

@@ -26,9 +26,10 @@ spec:
       imagePullSecrets:
         {{- toYaml .Values.global.imagePullSecrets | nindent 8 }}
       {{- end }}
-      {{- if .Values.worker.nodeSelector }}
+      {{- $nodeSelector := include "vllm-ray.nodeSelector" (dict "component" .Values.worker "defaultPool" "gpu" "nodePools" .Values.nodePools) }}
+      {{- if $nodeSelector }}
       nodeSelector:
-        {{- toYaml .Values.worker.nodeSelector | nindent 8 }}
+{{ $nodeSelector | indent 8 }}
       {{- end }}
       {{- if .Values.worker.tolerations }}
       tolerations:
@@ -36,7 +37,7 @@ spec:
       {{- end }}
       containers:
         - name: worker
-          image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
+          image: {{ .Values.worker.image.repository }}:{{ .Values.versions.vllmOpenAI }}
           imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
           command:
             - /bin/bash
@@ -71,5 +72,18 @@ spec:
       {{- if .Values.worker.volumes }}
       volumes:
         {{- toYaml .Values.worker.volumes | nindent 8 }}
+      {{- else }}
+      volumes:
+        - name: hf-cache
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            {{- if .Values.sharedMemory.worker.sizeLimit }}
+            sizeLimit: {{ .Values.sharedMemory.worker.sizeLimit }}
+            {{- end }}
+        - name: blob-models
+          persistentVolumeClaim:
+            claimName: {{ .Values.global.modelStorage.pvcName }}
       {{- end }}
 {{- end }}
